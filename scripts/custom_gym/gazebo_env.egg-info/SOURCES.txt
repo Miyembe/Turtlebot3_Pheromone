@@ -1,0 +1,6 @@
+setup.py
+gazebo_env.egg-info/PKG-INFO
+gazebo_env.egg-info/SOURCES.txt
+gazebo_env.egg-info/dependency_links.txt
+gazebo_env.egg-info/requires.txt
+gazebo_env.egg-info/top_level.txt
