@@ -49,7 +49,7 @@ class WaypointNavigation:
 
         theta = angles[2]
         #theta = pos.theta
-        
+        #how to make gazebo grid map
         # P controller
         v = 0
         w = 0
