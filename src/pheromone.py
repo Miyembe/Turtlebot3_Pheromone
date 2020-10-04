@@ -2,34 +2,35 @@
 # Node that handles pheromone layer
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
-
+import sys
+sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
+import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
 import numpy as np
+import tf
 import rospy
 import gazebo_msgs.msg
 from gazebo_msgs.msg import ModelStates 
 from std_msgs.msg import Float32
-import math
+from math import *
 import time
+from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
 
 class Node():
 
     def __init__(self, phero):
         self.pheromone = phero
-        self.pub_phero = rospy.Publisher('/phero_layer', Float32, queue_size=1)
+        self.pub_phero = rospy.Publisher('/phero_value', Float32, queue_size=1)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
-    
-    def pheroCallback(self, message, cargs):
-        
-        # Reading from arguments
-        pose = message.pose[1]
-        pos = pose.position
-        phero = cargs
+        self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
+        self.theta = 0
 
+    def posToIndex(self, x, y):
+        phero = self.pheromone
         # Read pheromone value at the robot position
-        res = phero.resolution
-        round_dp = int(math.log10(res))
-        x = round(pos.x, round_dp) # round the position value so that they fit into the centre of the cell.
-        y = round(pos.y, round_dp) # e.g. 0.13 -> 0.1
+        res = self.pheromone.resolution
+        round_dp = int(log10(res))
+        x = round(x, round_dp) # round the position value so that they fit into the centre of the cell.
+        y = round(y, round_dp) # e.g. 0.13 -> 0.1
         x = int(x*res)
         y = int(y*res)
         
@@ -38,6 +39,37 @@ class Node():
         y_index = y + (phero.num_cell-1)/2
         if x_index < 0 or y_index < 0 or x_index > phero.num_cell-1 or y_index > phero.num_cell-1:
             raise Exception("The pheromone matrix index is out of range.")
+        return x_index, y_index
+
+    def indexToPos(self, x_index, y_index):
+        
+        x = x_index - (self.pheromone.num_cell-1)/2
+        y = y_index - (self.pheromone.num_cell-1)/2
+
+        x = float(x) / self.pheromone.resolution
+        y = float(y) / self.pheromone.resolution
+
+        return x, y
+
+    def pheroCallback(self, message, cargs):
+        
+        # Reading from arguments
+        pose = message.pose[1]
+        twist = message.twist[1]
+        pos = pose.position
+        ori = pose.orientation
+        phero = cargs
+        x = pos.x
+        y = pos.y
+
+        angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
+        if angles[2] < 0:
+            self.theta = angles[2] + 2*pi
+        else: self.theta = angles[2]
+        
+        
+
+        x_index, y_index = self.posToIndex(pos.x, pos.y)
         
         # Assign pheromone value and publish it
         phero_val = phero.getPhero(x_index, y_index)
@@ -54,9 +86,60 @@ class Node():
             phero.step_timer = time_cur
         
         
-        print("Position: ({}, {}), Index position: ({}, {}), Pheromone Value: {}".format(x, y, x_index, y_index, phero_val))
-        print("Real position: ({}, {})".format(pos.x, pos.y))
+        #print("Position: ({}, {}), Index position: ({}, {}), Pheromone Value: {}".format(x, y, x_index, y_index, phero_val))
+        #print("Real position: ({}, {})".format(pos.x, pos.y))
         #print("x: {}, y: {}".format(x, y))
+
+    def nextGoal(self, req):
+        
+        # Convert the robot position to index for the pheromone matrix
+        x = req.x
+        y = req.y
+        x_index, y_index = self.posToIndex(x, y)
+        
+        # read the 9 nearby values and choose the cell with maximum value
+        max_phero = self.pheromone.getPhero(x, y)
+        phero_index = np.array([0,0])
+        rand_index = 0
+
+        ## Get the indices that contains maximum pheromone
+        for i in range(3):
+            for j in range(3):
+                if self.pheromone.getPhero(x+i-1, y+j-1) > max_phero: # TODO: Randomly select the cell if the values are equal
+                    phero_index = np.array([i-1, j-1])
+                    max_phero = self.pheromone.getPhero(x+i-1, y+j-1)
+                    print("Set new max")
+                elif self.pheromone.getPhero(x+i-1, y+j-1) == max_phero:
+                    phero_index = np.vstack((phero_index, [i-1, j-1]))
+                    print("phero_index: {}".format(phero_index))
+                    #print("Append phero val")
+
+        # Choose the index as a next goal from the array
+        ## Check the front cells (highest priority)
+        # if self.theta > (7/4) * pi or self.theta < (1/4) * pi:
+        #     for x in phero_index:
+        #         if x is np.array([1,0]) or x is np.array([1,1]) or x is np.array([1,2]):
+        #             np.append(final_index, x, axis=0)
+        rand_index = np.random.choice(phero_index.shape[0], 1)
+        final_index = phero_index[rand_index]
+        print("Final index: {}".format(final_index))
+        #print("Entire array: {}".format(phero_index))
+        #print("Rand index: {}".format(rand_index))
+
+
+
+
+
+
+
+        next_x_index = x_index + final_index[0,0]
+        next_y_index = y_index + final_index[0,1]
+
+        # Reconvert index values into position. 
+        next_x, next_y = self.indexToPos(next_x_index, next_y_index)
+        
+        return PheroGoalResponse(next_x, next_y) 
+
     
 
 
@@ -87,7 +170,7 @@ class Pheromone():
         if size % 2 == 0:
             raise Exception("Pheromone injection size must be an odd number.")
         time_cur = time.clock()
-        if time_cur-self.injection_timer > 0.4:
+        if time_cur-self.injection_timer > 10:
             for i in range(size):
                 for j in range(size):
                     self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = value
