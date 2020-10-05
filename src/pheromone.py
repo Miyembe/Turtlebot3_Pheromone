@@ -23,6 +23,9 @@ class Node():
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
         self.theta = 0
+        self.is_phero_inj = True
+        self.log_timer = time.clock()
+        self.log_file = open("phero_value.txt", "a+")
 
     def posToIndex(self, x, y):
         phero = self.pheromone
@@ -76,7 +79,8 @@ class Node():
         self.pub_phero.publish(phero_val)
 
         # Pheromone injection
-        phero.injection(x_index, y_index, 1, 3)
+        if self.is_phero_inj is True:
+            phero.injection(x_index, y_index, 0.1, 3)
 
 
         # Update pheromone matrix in every 0.1s
@@ -84,6 +88,14 @@ class Node():
         if time_cur-phero.step_timer >= 0.1: 
             phero.update()
             phero.step_timer = time_cur
+
+        log_time_cur = time.clock()
+        if log_time_cur - self.log_timer >= 2:
+            self.log_file = open("phero_value.txt", "a+")
+            np.savetxt(self.log_file, self.pheromone.grid, delimiter=',')
+            self.log_file.close()
+
+        
         
         
         #print("Position: ({}, {}), Index position: ({}, {}), Pheromone Value: {}".format(x, y, x_index, y_index, phero_val))
@@ -91,6 +103,9 @@ class Node():
         #print("x: {}, y: {}".format(x, y))
 
     def nextGoal(self, req):
+
+        # Turn off pheromone injection
+        self.is_phero_inj = False
         
         # Convert the robot position to index for the pheromone matrix
         x = req.x
@@ -122,7 +137,7 @@ class Node():
         #             np.append(final_index, x, axis=0)
         rand_index = np.random.choice(phero_index.shape[0], 1)
         final_index = phero_index[rand_index]
-        print("Final index: {}".format(final_index))
+        #print("Final index: {}".format(final_index))
         #print("Entire array: {}".format(phero_index))
         #print("Rand index: {}".format(rand_index))
 
@@ -137,6 +152,7 @@ class Node():
 
         # Reconvert index values into position. 
         next_x, next_y = self.indexToPos(next_x_index, next_y_index)
+        print("Pheromone value of goal: {}".format(self.pheromone.getPhero(next_x_index, next_y_index)))
         
         return PheroGoalResponse(next_x, next_y) 
 
@@ -151,8 +167,8 @@ class Pheromone():
         self.num_cell = self.resolution * self.size + 1
         if self.num_cell % 2 == 0:
             raise Exception("Number of cell is even. It needs to be an odd number")
-        self.grid = np.ones((self.num_cell, self.num_cell))
-        self.evaporation = 10 # elapsed seconds for pheromone to be halved
+        self.grid = np.zeros((self.num_cell, self.num_cell))
+        self.evaporation = 30 # elapsed seconds for pheromone to be halved
 
         # Timers
         self.update_timer = time.clock()
@@ -170,10 +186,10 @@ class Pheromone():
         if size % 2 == 0:
             raise Exception("Pheromone injection size must be an odd number.")
         time_cur = time.clock()
-        if time_cur-self.injection_timer > 10:
+        if time_cur-self.injection_timer > 0.1:
             for i in range(size):
                 for j in range(size):
-                    self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = value
+                    self.grid[x-(size-1)/2+i, y-(size-1)/2+j] += value
             self.injection_timer = time_cur
     
     # Update all the pheromone values depends on natural phenomena, e.g. evaporation

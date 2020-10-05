@@ -18,9 +18,9 @@ class PheromoneController:
     res = 10
     num_cell = 101
 
-    wGain = 3
+    wGain = 10
     vConst = 0.05
-    distThr = 0.01
+    distThr = 0.05
 
     def __init__(self):
         rospy.init_node('pheromone_controller', anonymous=False)
@@ -56,8 +56,21 @@ class PheromoneController:
         # Goal Assignment / when it has arrived the previous target
         if self.is_arrived is True:
             self.pheroGoalClient()
+        yaw = atan2(self.goal[1]-self.pos[1], self.goal[0]-self.pos[0])
 
+        if theta < 0:
+            theta = theta + 2*pi
+        if yaw < 0:
+            yaw = yaw + 2*pi
+
+        angle_diff = yaw - theta
+        if angle_diff < -pi:
+            angle_diff = angle_diff + 2*pi
+        if angle_diff > pi:
+            angle_diff = angle_diff - 2*pi
+        
         distance = sqrt((self.pos[0]-self.goal[0])**2+(self.pos[1]-self.goal[1])**2)
+
 
         # Update goal in a fixed period
         # cur_time = time.clock()
@@ -66,17 +79,22 @@ class PheromoneController:
         #     self.service_time = cur_time
 
         # Adjust Linear & Angular velocity
-        if (distance > self.distThr):
-            v = self.vConst
-            yaw = atan2(self.goal[1]-self.pos[1], self.goal[0]-self.pos[0])
-            u = yaw - theta
-            bound = atan2(sin(u), cos(u))
-            w = min(0.5, max(-0.5, self.wGain*bound))
-            self.is_arrived = False
+        #print("Angle diff: {}".format(angle_diff))
+        if abs(angle_diff) > 1.0*(2*pi/360):
+            w = min(1.0, max(-1.0, angle_diff))
+        else:
+            if (distance > self.distThr):
+                v = min(distance, 0.1) # self.vConst
+                #yaw = atan2(self.goal[1]-self.pos[1], self.goal[0]-self.pos[0])
+                #u = yaw - theta
+                #bound = atan2(sin(u), cos(u))
+                #w = min(1.0, max(-1.0, angle_diff))
+                self.is_arrived = False
         
-        elif (distance <= self.distThr):
-            self.is_arrived = True
-            print("It has arrived the goal!")
+            elif (distance <= self.distThr):
+                self.is_arrived = True
+                print("It has arrived the goal!")
+
 
         # Publish Velocity
         msg.linear.x = v
