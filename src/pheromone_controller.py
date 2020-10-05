@@ -20,7 +20,7 @@ class PheromoneController:
 
     wGain = 10
     vConst = 0.05
-    distThr = 0.05
+    distThr = 0.01
 
     def __init__(self):
         rospy.init_node('pheromone_controller', anonymous=False)
@@ -80,7 +80,7 @@ class PheromoneController:
 
         # Adjust Linear & Angular velocity
         #print("Angle diff: {}".format(angle_diff))
-        if abs(angle_diff) > 1.0*(2*pi/360):
+        if abs(angle_diff) > 5.0*(2*pi/360):
             w = min(1.0, max(-1.0, angle_diff))
         else:
             if (distance > self.distThr):

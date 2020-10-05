@@ -22,7 +22,7 @@ class Node():
         self.pub_phero = rospy.Publisher('/phero_value', Float32, queue_size=1)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
-        self.theta = 0
+        self.theta = 0 
         self.is_phero_inj = True
         self.log_timer = time.clock()
         self.log_file = open("phero_value.txt", "a+")
@@ -90,10 +90,11 @@ class Node():
             phero.step_timer = time_cur
 
         log_time_cur = time.clock()
-        if log_time_cur - self.log_timer >= 2:
-            self.log_file = open("phero_value.txt", "a+")
-            np.savetxt(self.log_file, self.pheromone.grid, delimiter=',')
-            self.log_file.close()
+        # Logging Pheromone grid
+        # if log_time_cur - self.log_timer >= 2:
+        #     self.log_file = open("phero_value.txt", "a+")
+        #     np.savetxt(self.log_file, self.pheromone.grid, delimiter=',')
+        #     self.log_file.close()
 
         
         
@@ -113,21 +114,25 @@ class Node():
         x_index, y_index = self.posToIndex(x, y)
         
         # read the 9 nearby values and choose the cell with maximum value
-        max_phero = self.pheromone.getPhero(x, y)
+        max_phero = self.pheromone.getPhero(x_index, y_index)
         phero_index = np.array([0,0])
+        phero_value = np.zeros((3,3))
         rand_index = 0
 
         ## Get the indices that contains maximum pheromone
         for i in range(3):
             for j in range(3):
-                if self.pheromone.getPhero(x+i-1, y+j-1) > max_phero: # TODO: Randomly select the cell if the values are equal
+                if self.pheromone.getPhero(x_index+i-1, y_index+j-1) > max_phero: # TODO: Randomly select the cell if the values are equal
                     phero_index = np.array([i-1, j-1])
-                    max_phero = self.pheromone.getPhero(x+i-1, y+j-1)
+                    max_phero = self.pheromone.getPhero(x_index+i-1, y_index+j-1)
                     print("Set new max")
-                elif self.pheromone.getPhero(x+i-1, y+j-1) == max_phero:
+                elif self.pheromone.getPhero(x_index+i-1, y_index+j-1) == max_phero:
                     phero_index = np.vstack((phero_index, [i-1, j-1]))
-                    print("phero_index: {}".format(phero_index))
+                phero_value[i,j] = self.pheromone.getPhero(x_index+i-1, y_index+j-1)
+                print("At the point ({}, {}), the pheromone value is {}".format(i,j,self.pheromone.getPhero(x_index+i-1, y_index+j-1)))
                     #print("Append phero val")
+        print("Phero_index: {}".format(phero_index))
+        print("Phero_value: {}".format(phero_value))
 
         # Choose the index as a next goal from the array
         ## Check the front cells (highest priority)
