@@ -24,6 +24,7 @@ class Node():
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
         self.theta = 0 
         self.is_phero_inj = True
+        self.phero_thr = 1.0
         self.log_timer = time.clock()
         self.log_file = open("phero_value.txt", "a+")
 
@@ -80,7 +81,7 @@ class Node():
 
         # Pheromone injection
         if self.is_phero_inj is True:
-            phero.injection(x_index, y_index, 0.1, 3)
+            phero.injection(x_index, y_index, 0.1, 3, self.phero_thr)
 
 
         # Update pheromone matrix in every 0.1s
@@ -187,7 +188,7 @@ class Pheromone():
         self.grid[x, y] = value
 
     # Inject pheromone at the robot position and nearby cells in square. Size must be an odd number. 
-    def injection(self, x, y, value, size):
+    def injection(self, x, y, value, size, threshold):
         if size % 2 == 0:
             raise Exception("Pheromone injection size must be an odd number.")
         time_cur = time.clock()
@@ -195,6 +196,8 @@ class Pheromone():
             for i in range(size):
                 for j in range(size):
                     self.grid[x-(size-1)/2+i, y-(size-1)/2+j] += value
+                    if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= threshold:
+                        self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = threshold
             self.injection_timer = time_cur
     
     # Update all the pheromone values depends on natural phenomena, e.g. evaporation
