@@ -9,18 +9,23 @@ import numpy as np
 import tf
 import rospy
 import gazebo_msgs.msg
-from gazebo_msgs.msg import ModelStates 
+from gazebo_msgs.msg import ModelStates
+from std_msgs.msg import Bool
 from std_msgs.msg import Float32
+from std_msgs.msg import Float32MultiArray
 from math import *
 import time
 from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
+from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
 
 class Node():
 
     def __init__(self, phero):
         self.pheromone = phero
-        self.pub_phero = rospy.Publisher('/phero_value', Float32, queue_size=1)
+        self.pub_phero = rospy.Publisher('/phero_value', Float32MultiArray, queue_size=10)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
+        #self.sub_inj = rospy.Subscriber('/phero_inj', Bool, self.injCallback)
+        self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign)
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
         self.theta = 0 
         self.is_phero_inj = True
@@ -70,18 +75,27 @@ class Node():
         if angles[2] < 0:
             self.theta = angles[2] + 2*pi
         else: self.theta = angles[2]
-        
-        
 
+        # Add two wheel position
+        wheel_distance = 0.2
+        pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        
         x_index, y_index = self.posToIndex(pos.x, pos.y)
-        
-        # Assign pheromone value and publish it
-        phero_val = phero.getPhero(x_index, y_index)
+        x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
+        x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
+        # Assign pheromone values from two positions and publish it
+        phero_val = Float32MultiArray()
+        phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
         self.pub_phero.publish(phero_val)
+        # # Assign pheromone value and publish it
+        # phero_val = phero.getPhero(x_index, y_index)
+        # self.pub_phero.publish(phero_val)
 
+        
         # Pheromone injection
         if self.is_phero_inj is True:
-            phero.injection(x_index, y_index, 0.1, 3, self.phero_thr)
+            phero.injection(x_index, y_index, 0.2, 3, self.phero_thr)
 
 
         # Update pheromone matrix in every 0.1s
@@ -103,6 +117,12 @@ class Node():
         #print("Position: ({}, {}), Index position: ({}, {}), Pheromone Value: {}".format(x, y, x_index, y_index, phero_val))
         #print("Real position: ({}, {})".format(pos.x, pos.y))
         #print("x: {}, y: {}".format(x, y))
+    def injAssign(self, req):
+        self.is_phero_inj = req
+        service_ok = True
+        return PheroInjResponse(service_ok)
+
+
 
     def nextGoal(self, req):
 
