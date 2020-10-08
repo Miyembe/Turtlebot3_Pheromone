@@ -48,6 +48,7 @@ class ContinuousController:
 
         phero_l = phero.data[0]
         phero_r = phero.data[1]
+        print("Pheromone ({}, {})".format(phero_l, phero_r))
 
         self.bias = 2.5 - (phero_l + phero_r)
         wheel_r = (phero_r - phero_l)/self.sensitivity + self.bias

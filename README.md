@@ -30,3 +30,10 @@ pheromone_controller.py can be flexibly modified so that you can design desired 
 
 Deep Reinforcement Learning will be added into the controller.
 
+# Usage
+
+1. How to generate and use pheromone trail?
+
+Using the teleop, generate pheromone trail manually. When it returns to home (currently 0,0), it saves the pheromone grid in tmp/NAME.npy (NAME is given in pheromone.py script).
+
+When you run continuous_controller.py, it loads the saved pheromone trail (you need to specify the name of pheromone).  

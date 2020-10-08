@@ -23,7 +23,8 @@ class Node():
 
     def __init__(self, phero):
         self.pheromone = phero
-        self.phero_thr = 1.0
+        self.phero_max = 1.0
+        self.phero_min = 0.0
         self.is_phero_inj = True
 
         self.pub_phero = rospy.Publisher('/phero_value', Float32MultiArray, queue_size=10)
@@ -31,9 +32,9 @@ class Node():
         #self.sub_inj = rospy.Subscriber('/phero_inj', Bool, self.injCallback)
         self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign)
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
+        self.is_service_requested = False
         self.theta = 0 
         
-
         self.log_timer = time.clock()
         self.log_file = open("phero_value.txt", "a+")
         self.is_saved = False
@@ -100,16 +101,16 @@ class Node():
         
         # Pheromone injection
         if self.is_phero_inj is True:
-            phero.injection(x_index, y_index, 0.2, 3, self.phero_thr)
+            phero.injection(x_index, y_index, 0.2, 3, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
         time_cur = time.clock()
         if time_cur-phero.step_timer >= 0.1: 
-            phero.update()
+            phero.update(self.phero_min, self.phero_max)
             phero.step_timer = time_cur
 
-        log_time_cur = time.clock()
+        #log_time_cur = time.clock()
         # Logging Pheromone grid
         # if log_time_cur - self.log_timer >= 2:
         #     self.log_file = open("phero_value.txt", "a+")
@@ -118,18 +119,19 @@ class Node():
 
         # Save the pheromone when robot return home.
         distance_to_origin = sqrt(x**2+y**2)
-        if self.is_saved is False and distance_to_origin < 0.01:
-            self.pheromone.save("foraging")
+        if self.is_saved is False and distance_to_origin < 0.05:
+            #self.pheromone.save("foraging")
             self.is_saved = True
             self.is_phero_inj = False
-            print("Pheromone saved and injection disabled.")
 
         # Load the pheromone
-        if self.is_loaded is False and self.is_phero_inj is False:
+        # print("1: {}".format(self.is_loaded))
+        # print("2: {}".format(self.is_phero_inj))
+        # print("3: {}".format(self.is_service_requested))
+        if self.is_loaded is False and self.is_phero_inj is False and self.is_service_requested is True:
             try:
                 self.pheromone.load("foraging")
                 self.is_loaded = True
-                print("Loaded.")
             except IOError as io:
                 print("No pheromone to load: %s"%io)
 
@@ -139,8 +141,9 @@ class Node():
 
         
     def injAssign(self, req):
-        self.is_phero_inj = req
+        self.is_phero_inj = req.is_inj
         service_ok = True
+        self.is_service_requested = True
         return PheroInjResponse(service_ok)
 
     def nextGoal(self, req):
@@ -218,7 +221,7 @@ class Pheromone():
         self.grid[x, y] = value
 
     # Inject pheromone at the robot position and nearby cells in square. Size must be an odd number. 
-    def injection(self, x, y, value, size, threshold):
+    def injection(self, x, y, value, size, max):
         if size % 2 == 0:
             raise Exception("Pheromone injection size must be an odd number.")
         time_cur = time.clock()
@@ -226,27 +229,27 @@ class Pheromone():
             for i in range(size):
                 for j in range(size):
                     self.grid[x-(size-1)/2+i, y-(size-1)/2+j] += value
-                    if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= threshold:
-                        self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = threshold
+                    if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= max:
+                        self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = max
             self.injection_timer = time_cur
     
     # Update all the pheromone values depends on natural phenomena, e.g. evaporation
-    def update(self):
+    def update(self, min, max):
         time_cur = time.clock()
-        # print('current time: {}, Last time: {}'.format(time_cur, self.time))
         time_elapsed = time_cur - self.update_timer
         self.update_timer = time_cur
-
+    
         # Diffusion 
         for i in range(self.num_cell):
             for j in range(self.num_cell):
-                self.grid_copy[i, j] = 0.6*self.grid[i, j]
-                if i >= 1: self.grid_copy[i-1, j] = 0.1*self.grid[i, j]
-                if j >= 1: self.grid_copy[i, j-1] = 0.1*self.grid[i, j]
-                if i < self.num_cell-1: self.grid_copy[i+1, j] = 0.1*self.grid[i, j]
-                if j < self.num_cell-1: self.grid_copy[i, j+1] = 0.1*self.grid[i, j]
-
-
+                self.grid_copy[i, j] += 0.9*self.grid[i, j]
+                if i >= 1: self.grid_copy[i-1, j] += 0.025*self.grid[i, j]
+                if j >= 1: self.grid_copy[i, j-1] += 0.025*self.grid[i, j]
+                if i < self.num_cell-1: self.grid_copy[i+1, j] += 0.025*self.grid[i, j]
+                if j < self.num_cell-1: self.grid_copy[i, j+1] += 0.025*self.grid[i, j]
+        #self.grid_copy = np.clip(self.grid_copy, a_min = min, a_max = max) 
+        self.grid = np.copy(self.grid_copy)
+        self.grid_copy = np.zeros((self.num_cell, self.num_cell))
         # evaporation
         decay = 2**(-time_elapsed/self.evaporation)
         for i in range(self.num_cell):
@@ -264,7 +267,7 @@ class Pheromone():
     def load(self, file_name):
         with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
-        os.remove('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))
+        #os.remove('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
     
