@@ -87,7 +87,7 @@ class Env:
         self.target_y = 0.0
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
-        self.model_index = 10
+        self.model_index = -1
 
         self.reset_proxy = rospy.ServiceProxy('gazebo/reset_simulation', Empty)
         self.is_stuck = False
@@ -154,6 +154,7 @@ class Env:
         pose = model_state.pose[self.model_index]
         x = pose.position.x
         y = pose.position.y
+        print("x: {}, y: {}".format(x, y))
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)
 
         # 1. Read pheromone (state) from the robot's position 
