@@ -61,6 +61,7 @@ add_service_files(
   FILES
   PheroGoal.srv
   PheroInj.srv 
+  PheroReset.srv
   #Service2.srv
 )
 

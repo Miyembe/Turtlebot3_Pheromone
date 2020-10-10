@@ -18,7 +18,7 @@ from math import *
 import time
 from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
-
+from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
 class Node():
 
     def __init__(self, phero):
@@ -27,18 +27,23 @@ class Node():
         self.phero_min = 0.0
         self.is_phero_inj = True
 
+        # Publisher & Subscribers
         self.pub_phero = rospy.Publisher('/phero_value', Float32MultiArray, queue_size=10)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
         #self.sub_inj = rospy.Subscriber('/phero_inj', Bool, self.injCallback)
-        self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign)
-        self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal)
+        
+        # Services
+        self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign) # Used in continuous controller 
+        self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal) # Used in phero_controller (discrete action)
+        self.srv_reset = rospy.Service('phero_reset', PheroReset, self.serviceReset)
         self.is_service_requested = False
         self.theta = 0 
         
         self.log_timer = time.clock()
         self.log_file = open("phero_value.txt", "a+")
         self.is_saved = False
-        self.is_loaded = False    
+        self.is_loaded = False
+        self.is_reset = False
 
     def posToIndex(self, x, y):
         phero = self.pheromone
@@ -99,9 +104,9 @@ class Node():
         # phero_val = phero.getPhero(x_index, y_index)
         # self.pub_phero.publish(phero_val)
         
-        # Pheromone injection
-        if self.is_phero_inj is True:
-            phero.injection(x_index, y_index, 0.2, 3, self.phero_max)
+        # Pheromone injection (uncomment it when injection is needed)
+        #if self.is_phero_inj is True:
+        #    phero.injection(x_index, y_index, 0.2, 3, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
@@ -118,33 +123,46 @@ class Node():
         #     self.log_file.close()
 
         # Save the pheromone when robot return home.
-        distance_to_origin = sqrt(x**2+y**2)
-        if self.is_saved is False and distance_to_origin < 0.05:
-            #self.pheromone.save("foraging")
-            self.is_saved = True
-            self.is_phero_inj = False
+        # distance_to_origin = sqrt(x**2+y**2)
+        # if self.is_saved is False and distance_to_origin < 0.05:
+        #     #self.pheromone.save("foraging")
+        #     self.is_saved = True
+        #     self.is_phero_inj = False
 
         # Load the pheromone
-        # print("1: {}".format(self.is_loaded))
-        # print("2: {}".format(self.is_phero_inj))
-        # print("3: {}".format(self.is_service_requested))
-        if self.is_loaded is False and self.is_phero_inj is False and self.is_service_requested is True:
+        # 1. When use continuous contoller. (1) It hasn't previously loaded, (2) pheromone injection is disabled, 
+        #    (3) service is requested by continuous controller script
+        # if self.is_loaded is False and self.is_phero_inj is False and self.is_service_requested is True:
+        #     try:
+        #         self.pheromone.load("foraging")
+        #         self.is_loaded = True
+        #     except IOError as io:
+        #         print("No pheromone to load: %s"%io)
+        
+        # 2. When reset is requested. 
+        if self.is_reset == True:
             try:
-                self.pheromone.load("foraging")
-                self.is_loaded = True
+                self.pheromone.load("foraging") # you can load any types of pheromone grid
+                self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
-
-        #print("Current directory : {}".format(os.getcwd()))
-        #print("Does catkin_ws exists? : {}".format(os.path.exists("/home/swn/catkin_ws")))
-        #print("Absolute path: {}".format(os.path.abspath("catkin_ws")))   
-
-        
+                
     def injAssign(self, req):
+        '''
+        Service Function that takes whether robot injects pheromone or not. 
+        '''
         self.is_phero_inj = req.is_inj
         service_ok = True
         self.is_service_requested = True
         return PheroInjResponse(service_ok)
+
+    def serviceReset(self, req):
+        '''
+        When request is received, pheromone grid is reset and load the prepared pheromone grid.
+        '''
+        self.is_reset = req.reset
+        is_reset = True
+        return PheroResetResponse(is_reset)
 
     def nextGoal(self, req):
 

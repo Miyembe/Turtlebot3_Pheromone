@@ -13,6 +13,7 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
+from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
 
 import time
 import tensorflow
@@ -25,6 +26,8 @@ import keras.backend as K
 import gym
 import numpy as np
 import random
+
+
 
 class InfoGetter(object):
     def __init__(self):
@@ -50,6 +53,11 @@ class InfoGetter(object):
 class Env:
 
     def __init__(self):
+
+        # Settings
+        self.num_robots = 1
+
+        # Node initialisation
         self.node = rospy.init_node('phero_turtlebot_env', anonymous=True)
         self.pose_ig = InfoGetter()
         self.phero_ig = InfoGetter()
@@ -93,6 +101,7 @@ class Env:
         self.is_stuck = False
 
         # Miscellanous
+        self.ep_len_counter = 0
 
     #To be done when real robots are used
     
@@ -137,39 +146,63 @@ class Env:
         self.pub.publish(self.move_cmd)
         self.rate.sleep()
 
-        return initial_state
+        rospy.wait_for_service('phero_reset')
+        try:
+            phero_reset = rospy.ServiceProxy('phero_reset', PheroReset)
+            resp = phero_reset(True)
+            print("Reset Pheromone grid successfully: {}".format(resp))
+        except rospy.ServiceException as e:
+            print("Service Failed %s"%e)
+
+        return range(0, self.num_robots), initial_state
 
         # When turtlebot is collided with wall, obstacles etc - need to reset
         # def turtlebot_collsion(self):
 
-    def step(self, time_step=0.1):
-
+    def step(self, time_step=0.1, linear_x=0.2, angular_z=0.0):
+        # 20201010 How can I make the action input results in the change in state?
+        # I read tensorswarm, and it takes request and go one step.
+        # It waited until m_loop_done is True - at the end of the post step.
+        
+        # 0. Initiliasation
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
+
+        self.move_cmd.linear.x = linear_x
+        self.move_cmd.angular.z = angular_z
         self.rate.sleep()
         done = False
-        # 0. Read the position of robot
+
+        # 1. Move robot with the action input for time_step
+        while (record_time_step < time_step and done == False):
+            self.pub.publish(self.move_cmd)
+            self.rate.sleep()
+            record_time = time.time()
+            record_time_step = record_time - start_time
+
+        # 2. Read the position of robot
         model_state = self.pose_ig.get_msg()
         pose = model_state.pose[self.model_index]
         x = pose.position.x
         y = pose.position.y
+        #print("sample")
         print("x: {}, y: {}".format(x, y))
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)
 
-        # 1. Read pheromone (state) from the robot's position 
+        # 3. Read pheromone (state) from the robot's position 
         state = self.phero_ig.get_msg()
         state_arr = np.asarray(state.data)
 
-        # 2. State reshape
+        # 4. State reshape
         state = state_arr.reshape(1, self.state_num)
 
-        # 3. Reward assignment
-        ## 3.0. Initialisation of rewards
+        # 5. Reward assignment
+        ## 5.0. Initialisation of rewards
         time_penalty = 0.0
         phero_reward = 0.0
         goal_reward = 0.0
-        ## 3.1. Time penalty
+        ## 5.1. Time penalty
         if (done is False):
             # Timer based
             # record_time = time.time()
@@ -178,21 +211,21 @@ class Env:
 
             # Iteration based
             time_penalty = -1.0
-        ## 3.2. Pheromone reward (The higher pheromone, the higher reward)
+        ## 5.2. Pheromone reward (The higher pheromone, the higher reward)
             phero_avg = np.average(state)
             phero_reward = phero_avg - 1.0 # max phero: 0, min phero: -1
 
-        ## 3.3. Goal reward
+        ## 5.3. Goal reward
             if distance_to_goal <= 0.5:
                 goal_reward = 100.0
                 done = True
                 self.reset()
                 time.sleep(1)
-        ## 3.4. Collision penalty
+        ## 5.4. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #
 
-        # 4. Stuck resetting (need to modify for this particular condition)
+        # 6. Stuck resetting (need to modify for this particular condition)
         #   if it stucks, reset the position
         #   if  linear_x > 0.01 and angular_z > 0.05 and abs(distance_reward) < 0.005:
                 # self.stuck_indicator = self.stuck_indicator+1
@@ -206,8 +239,10 @@ class Env:
         #     self.stuck_indicator = 0
 
         reward = time_penalty + phero_reward + goal_reward
-        
-        return state, reward, done
+        info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
+        self.ep_len_counter = self.ep_len_counter + 1
+        print("state: {}, reward: {}, done:{}, info: {}".format(state, reward, done, info))
+        return range(0, self.num_robots), state, reward, done, info
     
     def print_debug(self):
 
