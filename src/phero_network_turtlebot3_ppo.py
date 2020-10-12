@@ -7,6 +7,7 @@
 import phero_turtlebot_turtlebot3_ppo
 import numpy as np
 import os
+import sys
 import multiprocessing
 # from keras.models import Sequential, Model
 # from keras.layers import Dense, Dropout, Input, merge
@@ -102,7 +103,7 @@ class PheroTurtlebotPolicy(object):
         net = tf.layers.dense(phero, 500, activation=tf.nn.relu)
         net = tf.layers.dense(net, 500, activation=tf.nn.relu)
         net = tf.layers.dense(net, 500, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 1, activation=tf.nn.relu)
+        #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
 
@@ -155,6 +156,9 @@ class Model(object):
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
+        print("-------------------")
+        print("vf :{}".format(train_model.vf))
+        print("-------------------")
         vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
         # Unclipped loss
         vf_losses1 = tf.square(vpred - R)
@@ -232,14 +236,21 @@ class Model(object):
 
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
+            counter = 0
+            # for i in td_map:   
+            #     counter += 1
+            #     if counter == 5:
+            #         print("key: {}, value:{}, len:{}".format(i,td_map[i],len(td_map[i])))
+            
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
+            #print("here?") 
             return sess.run(
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
                 td_map
             )[:-1]
-            self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
+        
 
         def save(save_path):
             save_path = self.saver.save(sess, save_path)
@@ -249,7 +260,7 @@ class Model(object):
             self.saver.restore(sess, restore_path)
             print("Model restored.")
 
-
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         self.train = train
         self.train_model = train_model
         self.act_model = act_model
@@ -354,7 +365,7 @@ class PPO:
     def __init__(self, policy, env, nsteps, total_timesteps, ent_coef, lr,
           vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
           log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-          save_interval=0, restore_path=None, deterministic=False):
+          save_interval=20, restore_path=None, deterministic=False):
 
         if isinstance(lr, float): lr = self.constfn(lr)
         else: assert callable(lr)
@@ -385,8 +396,9 @@ class PPO:
 
     def learn(self):
         total_timesteps = int(self.total_timesteps)
-        time_str = time.strftime("%m_%m_%H_%M_%S")
-        #board_logger = tensorboard_logging.Logger(os.path.join(logger.get_dir(), "tf_board", time_str))
+        time_str = time.strftime("%Y%m%d-%H%M%S")
+        logger_ins = logger.Logger('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+        board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
         nenvs = 1
         #nenvs = env.num_envs
@@ -412,10 +424,10 @@ class PPO:
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         
         # Save function 
-        if save_interval and logger.get_dir():
-            import cloudpickle
-            with open(osp.join(logger.get_dir(), 'make_model.pkl'), 'wb') as fh:
-                fh.write(cloudpickle.dumps(make_model))
+        # if save_interval and logger_ins.get_dir():
+        #     import cloudpickle
+        #     with open(osp.join(logger_ins.get_dir(), 'make_model.pkl'), 'wb') as fh:
+        #         fh.write(cloudpickle.dumps(make_model))
 
         # Make a model
         model = make_model()
@@ -468,6 +480,8 @@ class PPO:
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
+                        returns_np = np.asarray(returns[mbinds])
+                        # print("lrnow: {}, cliprangenow: {}, ids[mbinds]: {}, obs[i]: {}, returns[mbinds]: {}".format(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds]))
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
                                         masks[mbinds], actions[mbinds], values[mbinds],
                                         neglogpacs[mbinds]))
@@ -484,6 +498,7 @@ class PPO:
                         end = start + envsperbatch
                         mbenvinds = envinds[start:end]
                         mbflatinds = flatinds[mbenvinds].ravel()
+                        print(mbflatinds)
                         slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                         mbstates = states[mbenvinds]
                         mblossvals.append(model.train(lrnow, cliprangenow,
@@ -495,33 +510,34 @@ class PPO:
             tnow = time.time()
             fps = int(nbatch / (tnow - tstart))
             # Logging
-            # if update % log_interval == 0 or update == 1:
-            #     #ev = explained_variance(values, returns)
-            #     logger.logkv("serial_timesteps", update*nsteps)
-            #     logger.logkv("nupdates", update)
-            #     logger.logkv("total_timesteps", update*nbatch)
-            #     logger.logkv("fps", fps)
-            #     #logger.logkv("explained_variance", float(ev))
-            #     logger.logkv('eprewmean', self.safemean([epinfo['r'] for epinfo in epinfobuf]))
-            #     logger.logkv('eplenmean', self.safemean([epinfo['l'] for epinfo in epinfobuf]))
-            #     logger.logkv('time_elapsed', tnow - tfirststart)
-            #     for (lossval, lossname) in zip(lossvals, model.loss_names):
-            #         logger.logkv(lossname, lossval)
-            #     logger.dumpkvs()
-            #     board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
-            #     board_logger.flush()
-            # if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir():
-            #     checkdir = osp.join(logger.get_dir(), 'checkpoints')
-            #     if not os.path.isdir(checkdir):
-            #         os.makedirs(checkdir)
-            #     savepath = osp.join(checkdir, "r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])) + '%.5i'%update)
-            #     print('Saving to', savepath)
-            #     model.save(savepath)
+            if update % log_interval == 0 or update == 1:
+                #ev = explained_variance(values, returns)
+                logger_ins.logkv("serial_timesteps", update*nsteps)
+                logger_ins.logkv("nupdates", update)
+                logger_ins.logkv("total_timesteps", update*nbatch)
+                logger_ins.logkv("fps", fps)
+                #logger.logkv("explained_variance", float(ev))
+                logger_ins.logkv('eprewmean', self.safemean([epinfo['r'] for epinfo in epinfobuf]))
+                logger_ins.logkv('eplenmean', self.safemean([epinfo['l'] for epinfo in epinfobuf]))
+                logger_ins.logkv('time_elapsed', tnow - tfirststart)
+                for (lossval, lossname) in zip(lossvals, model.loss_names):
+                    logger_ins.logkv(lossname, lossval)
+                logger_ins.dumpkvs()
+                board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
+                board_logger.flush()
+            if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
+                print("check point")
+                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
+                if not os.path.isdir(checkdir):
+                    os.makedirs(checkdir)
+                savepath = osp.join(checkdir, '%.5i'%update +"r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])))
+                print('Saving to', savepath)
+                model.save(savepath)
         print("Done with training. Exiting.")
-        env.close()
+        self.env.close()
         return model
 
-    def safemean(xs):
+    def safemean(self, xs):
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():

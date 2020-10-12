@@ -25,6 +25,9 @@ import functools
 from tf_util import get_session, save_variables, load_variables
 from tf_util import initialize
 
+# Logging
+import logger
+import tensorboard_logging
 
 
 
@@ -118,6 +121,8 @@ class ActorCritic:
         self.step = act_model.step
         self.value = act_model.value
         self.initial_state = act_model.initial_state
+    
+    def 
 class Runner:
     '''
     Runs policy in environment for T time steps

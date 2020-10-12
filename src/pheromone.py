@@ -225,7 +225,7 @@ class Pheromone():
             raise Exception("Number of cell is even. It needs to be an odd number")
         self.grid = np.zeros((self.num_cell, self.num_cell))
         self.grid_copy = np.zeros((self.num_cell, self.num_cell))
-        self.evaporation = 60 # elapsed seconds for pheromone to be halved
+        self.evaporation = 180 # elapsed seconds for pheromone to be halved
 
         # Timers
         self.update_timer = time.clock()

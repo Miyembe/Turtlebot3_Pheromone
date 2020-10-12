@@ -93,12 +93,16 @@ class Env:
         # Set target position (stop sign in mini_arena.world)
         self.target_x = 2.0
         self.target_y = 0.0
+        
+        # Last robot positions (to use for stuck indicator)
+        self.last_x = 0.0
+        self.last_y = 0.0
+        self.stuck_indicator = 0
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
         self.model_index = -1
 
         self.reset_proxy = rospy.ServiceProxy('gazebo/reset_simulation', Empty)
-        self.is_stuck = False
 
         # Miscellanous
         self.ep_len_counter = 0
@@ -153,6 +157,8 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
+        
+        self.stuck_indicator = 0
 
         return range(0, self.num_robots), initial_state
 
@@ -171,6 +177,7 @@ class Env:
 
         self.move_cmd.linear.x = linear_x
         self.move_cmd.angular.z = angular_z
+        action = np.array([linear_x, angular_z])
         self.rate.sleep()
         done = False
 
@@ -216,7 +223,7 @@ class Env:
             phero_reward = phero_avg - 1.0 # max phero: 0, min phero: -1
 
         ## 5.3. Goal reward
-            if distance_to_goal <= 0.5:
+            if distance_to_goal <= 0.3:
                 goal_reward = 100.0
                 done = True
                 self.reset()
@@ -226,24 +233,35 @@ class Env:
         #
 
         # 6. Stuck resetting (need to modify for this particular condition)
-        #   if it stucks, reset the position
-        #   if  linear_x > 0.01 and angular_z > 0.05 and abs(distance_reward) < 0.005:
-                # self.stuck_indicator = self.stuck_indicator+1
-                # if self.stuck_indicator >4:
-                #     self.stuck_indicator = 0
-                #     print("it is resetting!!!!!")
-                #     time.sleep(5)
-                #     self.reset()
+        #    if it stucks, reset the position
+        distance_bet_pos = sqrt((x-self.last_x)**2+(y-self.last_y)**2)
+        if distance_bet_pos < 0.0005: 
+            self.stuck_indicator = self.stuck_indicator+1
+            if self.stuck_indicator > 10:
+                self.stuck_indicator = 0
+                print("Reset: The robot is stuck")
+                time.sleep(3)
+                self.reset()
+        self.last_x = x
+        self.last_y = y
 
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
         reward = time_penalty + phero_reward + goal_reward
+        reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
-        print("state: {}, reward: {}, done:{}, info: {}".format(state, reward, done, info))
+        print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), state, reward, done, info
     
+    def stuckChecker(self):
+        '''
+        Check if robot is stuck for any reason. 
+        1. Check 10 time steps whether it moves or stuck
+        2. If it is stuck, reset the environment and change the indicator
+        '''
+        
     def print_debug(self):
 
         # For debugging. return any data you want. 
