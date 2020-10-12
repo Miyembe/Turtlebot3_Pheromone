@@ -32,8 +32,10 @@ import scipy.io as sio
 import logger
 #from numba import jit
 
-# Abstract form of Env runner that only reads env, model, # of env and etc for running the model with the given environment
 class AbstractEnvRunner(object):
+    '''
+    Basic class import env, model and etc (used in Runner class)
+    '''
     def __init__(self, env, model, nsteps):
         self.env = env
         self.model = model
@@ -46,8 +48,10 @@ class AbstractEnvRunner(object):
     def run(self):
         raise NotImplementedError
 
-# Policy consists of neural net. step returns the action based on states according to the net.
 class PheroTurtlebotPolicy(object):
+    '''
+    Policy Class
+    '''
     #20201009 Detail needs to be modified specifically for phero turtlebot use
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False, deterministic = False): #pylint: disable=W0613
         
@@ -77,6 +81,9 @@ class PheroTurtlebotPolicy(object):
         self.vf = vf
 
         def step(ob, *_args, **_kwargs):
+            '''
+            Generate action & value & log probability by inputting one observation into the policy neural net
+            '''
             # 20201009 Should I get just array or single value?
             phero = ob 
             # lb = [o["laser"] for o in ob]
@@ -99,6 +106,9 @@ class PheroTurtlebotPolicy(object):
         self.value = value
 
     def net(self, phero):
+        '''
+        Policy Network 
+        '''
         # 20201009 Simple neural net. Needs to be modified for better output.
         net = tf.layers.dense(phero, 500, activation=tf.nn.relu)
         net = tf.layers.dense(net, 500, activation=tf.nn.relu)
@@ -114,6 +124,7 @@ class Model(object):
     __init__:
     - Creates the step_model
     - Creates the train_model
+    - Create placeholders needs for PPO
     train():
     - Make the training part (feedforward and retropropagation of gradients)
     save/load():
@@ -130,7 +141,7 @@ class Model(object):
         ## Train model for training
         train_model = policy(sess, ob_space, ac_space, nbatch_train, nsteps, reuse=True, deterministic=deterministic)
 
-        # Create placeholders
+        '''Create Placeholders'''
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
         R = tf.placeholder(tf.float32, [None])
@@ -150,15 +161,12 @@ class Model(object):
         entropy = tf.reduce_mean(train_model.pd.entropy())
 
 
-        # LOSS CALCULATION
+        ''' LOSS CALCULATION '''
         # Total loss = Policy gradient loss (clipped) - entropy * entropy coefficient + Value coefficient * value loss
         
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
-        print("-------------------")
-        print("vf :{}".format(train_model.vf))
-        print("-------------------")
         vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
         # Unclipped loss
         vf_losses1 = tf.square(vpred - R)
@@ -179,7 +187,7 @@ class Model(object):
         # Calculate total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
-        # UPDATE THE PARAMETERS USING LOSS
+        ''' UPDATE THE PARAMETERS USING LOSS '''
         # 1. Get the model parameters
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
@@ -230,17 +238,13 @@ class Model(object):
 
         
         def train(lr, cliprange, ids, obs, returns, masks, actions, values, neglogpacs, states=None):
-
-
+            '''
+            Put values into placeholders and train the policy neural network
+            '''
             pb, advs, returns, masks, actions, values, neglogpacs = reshape(ids, obs, returns, masks, actions, values, neglogpacs)
 
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
-            counter = 0
-            # for i in td_map:   
-            #     counter += 1
-            #     if counter == 5:
-            #         print("key: {}, value:{}, len:{}".format(i,td_map[i],len(td_map[i])))
             
             if states is not None:
                 td_map[train_model.S] = states
@@ -259,7 +263,7 @@ class Model(object):
         def restore(restore_path):
             self.saver.restore(sess, restore_path)
             print("Model restored.")
-
+        
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         self.train = train
         self.train_model = train_model
@@ -296,6 +300,10 @@ class Model(object):
             return tf.Session(config=config, graph=graph)
 
 class Runner(AbstractEnvRunner):
+    '''
+    Runner class used to make samples using policy for T timesteps
+    This is the first part of PPO algorithm.
+    '''
 
     def __init__(self, env, model, nsteps, gamma, lam):
         super(Runner, self).__init__(env=env, model=model, nsteps=nsteps)
@@ -321,6 +329,7 @@ class Runner(AbstractEnvRunner):
         for _ in range(self.nsteps):
             #print self.obs
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            print("self_states: {}".format(self.states))
             mb_ids.append(self.ids)
             mb_obs.append(self.obs)
             mb_actions.append(actions)
@@ -361,6 +370,9 @@ class Runner(AbstractEnvRunner):
                 mb_states, epinfos
 
 class PPO:
+    '''
+    The main PPO class. The whole PPO algorithm is executed in 'learn' function
+    '''
 
     def __init__(self, policy, env, nsteps, total_timesteps, ent_coef, lr,
           vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
@@ -395,13 +407,15 @@ class PPO:
         return f
 
     def learn(self):
-        total_timesteps = int(self.total_timesteps)
+        # For logging
         time_str = time.strftime("%Y%m%d-%H%M%S")
         logger_ins = logger.Logger('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
+        # reassigning the members of class into this function for simplicity
+        total_timesteps = int(self.total_timesteps)
         nenvs = 1
-        #nenvs = env.num_envs
+        #nenvs = env.num_envs # for multiple instance training
         ob_space = self.env.observation_space
         ac_space = self.env.action_space
         nbatch = nenvs * self.nsteps
@@ -448,8 +462,15 @@ class PPO:
         # Calculate # for update (iteration)
         nupdates = total_timesteps//nbatch
         assert(nupdates > 0)
-        
-        # Updates the weights by # of updates
+
+        '''
+        PPO (iterating)
+        1. Run policy in the environment for T timesteps
+        2. Compute advantage estimates (in Model class)
+        3. Optimise Loss w.r.t weights of policy, with K epochs and minibatch size M < N (# of actors) * T (timesteps)
+        4. Update weights (in Model class)
+        '''
+        # In every update, one loop of PPO algorithm is executed
         for update in range(1, nupdates+1):
             
             # INITIALISE PARAMETERS
@@ -460,7 +481,7 @@ class PPO:
             lrnow = lr(frac)
             cliprangenow = cliprange(frac)
 
-            # Run policy and get samples for nsteps
+            # 1. Run policy and get samples for nsteps
             ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()
             epinfobuf.extend(epinfos)
             mblossvals = []
@@ -468,20 +489,22 @@ class PPO:
             # Do not train or log if in deterministic mode:
             if deterministic:
                 continue
-
+            
+            # 3. Optimise Loss w.r.t weights of policy, with K epochs and minibatch size M < N (# of actors) * T (timesteps)
             if states is None: # nonrecurrent version
                 #
                 inds = np.arange(nbatch)
                 # Update weights using optimiser by noptepochs
                 for _ in range(noptepochs):
                     #np.random.shuffle(inds)
+
                     # In each epoch, update weights using samples every minibatch in the total batch
-                    # epoch = n*batch = n*m*minibatch
+                    # epoch = m(32)*minibatch(4)
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
                         returns_np = np.asarray(returns[mbinds])
-                        # print("lrnow: {}, cliprangenow: {}, ids[mbinds]: {}, obs[i]: {}, returns[mbinds]: {}".format(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds]))
+                        # 4. Update weights
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
                                         masks[mbinds], actions[mbinds], values[mbinds],
                                         neglogpacs[mbinds]))
@@ -507,9 +530,13 @@ class PPO:
 
             # Calculate mean loss
             lossvals = np.mean(mblossvals, axis=0)
+
             tnow = time.time()
             fps = int(nbatch / (tnow - tstart))
-            # Logging
+            
+            '''
+            Logging and saving model & weights
+            '''
             if update % log_interval == 0 or update == 1:
                 #ev = explained_variance(values, returns)
                 logger_ins.logkv("serial_timesteps", update*nsteps)
@@ -526,7 +553,6 @@ class PPO:
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
                 board_logger.flush()
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
-                print("check point")
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
                 if not os.path.isdir(checkdir):
                     os.makedirs(checkdir)
@@ -542,7 +568,6 @@ class PPO:
 
 def main():
     env = phero_turtlebot_turtlebot3_ppo.Env()
-    #pt_policy = PheroTurtlebotPolicy()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=4, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,

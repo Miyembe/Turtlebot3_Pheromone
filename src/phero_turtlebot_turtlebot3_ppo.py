@@ -254,13 +254,6 @@ class Env:
         self.ep_len_counter = self.ep_len_counter + 1
         print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), state, reward, done, info
-    
-    def stuckChecker(self):
-        '''
-        Check if robot is stuck for any reason. 
-        1. Check 10 time steps whether it moves or stuck
-        2. If it is stuck, reset the environment and change the indicator
-        '''
         
     def print_debug(self):
 
