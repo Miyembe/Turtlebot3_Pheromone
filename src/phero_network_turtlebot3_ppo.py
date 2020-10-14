@@ -4,7 +4,8 @@
 # The environment is given in the pair script (phero_turtlebot_turtlebot3_ppo.py)
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
-import phero_turtlebot_turtlebot3_ppo
+#import phero_turtlebot_turtlebot3_ppo
+import phero_turtlebot_turtlebot3_repellent_ppo
 import numpy as np
 import os
 import sys
@@ -57,8 +58,9 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
+        print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 10), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -91,8 +93,12 @@ class PheroTurtlebotPolicy(object):
             # vb = [o["velocities"] for o in ob]
 
             #print(rb)
-
+            #print("mean: {}, std: {}".format(self.pd.mean, self.pd.std))
             a, v, neglogp = sess.run([a0, vf, neglogp0], {self.phero: phero})
+            # Action clipping (normalising action within the range (-1, 1) for better training)
+            # The network will learn what is happening as the training goes.
+            for i in range(a.shape[1]):
+                a[0][i] = min(1.0, max(-1.0, a[0][i]))
             return a, v, self.initial_state, neglogp
 
         def value(ob, *_args, **_kwargs):
@@ -324,12 +330,11 @@ class Runner(AbstractEnvRunner):
         mb_states = self.states
         epinfos = []
         self.ids, self.obs = self.env.reset()
-        self.obs = np.asarray(self.obs).reshape(1,2)
+        self.obs = np.asarray(self.obs).reshape(1, self.env.state_num)
         self.dones = [False] * self.env.num_robots
         for _ in range(self.nsteps):
             #print self.obs
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
-            print("self_states: {}".format(self.states))
             mb_ids.append(self.ids)
             mb_obs.append(self.obs)
             mb_actions.append(actions)
@@ -567,8 +572,8 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_ppo.Env()
-    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=4, lam=0.95, gamma=0.99,
+    env = phero_turtlebot_turtlebot3_repellent_ppo.Env()
+    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=256, nminibatches=4, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,

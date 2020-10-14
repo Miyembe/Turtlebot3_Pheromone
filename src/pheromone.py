@@ -43,7 +43,23 @@ class Node():
         self.log_file = open("phero_value.txt", "a+")
         self.is_saved = False
         self.is_loaded = False
-        self.is_reset = False
+        self.is_reset = True # False for reset
+
+        self.pheromone.isDiffusion = True
+        self.pheromone.isEvaporation = False
+        self.startTime = time.time()
+
+        # # PosToIndex for pheromone circle
+        # x_3, y_3 = self.posToIndex(3,3)
+        # x_n3, y_n3 = self.posToIndex(-3,-3)
+        # x_0, y_0 = self.posToIndex(0,0)
+        # # Pheromone Initilaisation
+        # self.pheromone.circle(x_3, y_0, 1, 1)
+        # self.pheromone.circle(x_n3, y_0, 1, 1)
+        # self.pheromone.circle(x_0, y_3, 1, 1)
+        # self.pheromone.circle(x_0,y_n3, 1, 1)
+
+        
 
     def posToIndex(self, x, y):
         phero = self.pheromone
@@ -88,32 +104,49 @@ class Node():
             self.theta = angles[2] + 2*pi
         else: self.theta = angles[2]
 
+        '''
+        Pheromone Value Reading
+        '''
+
+        '''2 pheromone values'''
         # Add two wheel position
-        wheel_distance = 0.2
-        pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        # wheel_distance = 0.2
+        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
         
-        x_index, y_index = self.posToIndex(pos.x, pos.y)
-        x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
-        x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
-        # Assign pheromone values from two positions and publish it
+        # x_index, y_index = self.posToIndex(pos.x, pos.y)
+        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
+        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
+
+        # # Assign pheromone values from two positions and publish it
+        # phero_val = Float32MultiArray()
+        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
+        # self.pub_phero.publish(phero_val)
+
+        '''9 pheromone values'''
+        # Position of 9 cells surrounding the robot
+        x_index, y_index = self.posToIndex(x, y)
         phero_val = Float32MultiArray()
-        phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
+        #phero_arr = np.array( )
+        for i in range(3):
+            for j in range(3):
+                phero_val.data.append(self.pheromone.getPhero(x_index+i-1, y_index+j-1)) # TODO: Randomly select the cell if the values are equal
+        #print("phero_val: {}".format(phero_val.data))
         self.pub_phero.publish(phero_val)
         # # Assign pheromone value and publish it
         # phero_val = phero.getPhero(x_index, y_index)
         # self.pub_phero.publish(phero_val)
         
         # Pheromone injection (uncomment it when injection is needed)
-        #if self.is_phero_inj is True:
-        #    phero.injection(x_index, y_index, 0.2, 3, self.phero_max)
+        # if self.is_phero_inj is True:
+        #     phero.injection(x_index, y_index, 0.2, 5, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
-        time_cur = time.clock()
-        if time_cur-phero.step_timer >= 0.1: 
-            phero.update(self.phero_min, self.phero_max)
-            phero.step_timer = time_cur
+        # time_cur = time.clock()
+        # if time_cur-phero.step_timer >= 0.1: 
+        #     phero.update(self.phero_min, self.phero_max)
+        #     phero.step_timer = time_cur
 
         #log_time_cur = time.clock()
         # Logging Pheromone grid
@@ -122,13 +155,21 @@ class Node():
         #     np.savetxt(self.log_file, self.pheromone.grid, delimiter=',')
         #     self.log_file.close()
 
+        
+        '''Saving pheromone'''
+        # Save after 20s
+        # time_check = time.time()
+        # if time_check - self.startTime >= 20 and self.is_saved is False:
+        #     self.pheromone.save("collision_avoidance_diffused")
+        #     self.is_saved = True
+        
         # Save the pheromone when robot return home.
         # distance_to_origin = sqrt(x**2+y**2)
         # if self.is_saved is False and distance_to_origin < 0.05:
-        #     #self.pheromone.save("foraging")
+        #     self.pheromone.save("foraging_static")
         #     self.is_saved = True
         #     self.is_phero_inj = False
-
+        '''Loading Pheromone'''
         # Load the pheromone
         # 1. When use continuous contoller. (1) It hasn't previously loaded, (2) pheromone injection is disabled, 
         #    (3) service is requested by continuous controller script
@@ -139,10 +180,10 @@ class Node():
         #     except IOError as io:
         #         print("No pheromone to load: %s"%io)
         
-        # 2. When reset is requested. 
+        # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("foraging") # you can load any types of pheromone grid
+                self.pheromone.load("collision_avoidance_diffused") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
@@ -226,6 +267,8 @@ class Pheromone():
         self.grid = np.zeros((self.num_cell, self.num_cell))
         self.grid_copy = np.zeros((self.num_cell, self.num_cell))
         self.evaporation = 180 # elapsed seconds for pheromone to be halved
+        self.isDiffusion = True
+        self.isEvaporation = True
 
         # Timers
         self.update_timer = time.clock()
@@ -250,29 +293,39 @@ class Pheromone():
                     if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= max:
                         self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = max
             self.injection_timer = time_cur
+
+    def circle(self, x, y, value, radius):
+        radius = radius*self.resolution
+        for i in range(-radius, radius):
+            for j in range(-radius, radius):
+                if sqrt(i**2+j**2) <= radius:
+                    self.grid[x+i, y+j] = value
+
     
     # Update all the pheromone values depends on natural phenomena, e.g. evaporation
     def update(self, min, max):
         time_cur = time.clock()
         time_elapsed = time_cur - self.update_timer
         self.update_timer = time_cur
-    
-        # Diffusion 
-        for i in range(self.num_cell):
-            for j in range(self.num_cell):
-                self.grid_copy[i, j] += 0.9*self.grid[i, j]
-                if i >= 1: self.grid_copy[i-1, j] += 0.025*self.grid[i, j]
-                if j >= 1: self.grid_copy[i, j-1] += 0.025*self.grid[i, j]
-                if i < self.num_cell-1: self.grid_copy[i+1, j] += 0.025*self.grid[i, j]
-                if j < self.num_cell-1: self.grid_copy[i, j+1] += 0.025*self.grid[i, j]
-        #self.grid_copy = np.clip(self.grid_copy, a_min = min, a_max = max) 
-        self.grid = np.copy(self.grid_copy)
-        self.grid_copy = np.zeros((self.num_cell, self.num_cell))
-        # evaporation
-        decay = 2**(-time_elapsed/self.evaporation)
-        for i in range(self.num_cell):
-            for j in range(self.num_cell):
-                self.grid[i, j] = decay * self.grid[i, j]
+
+        if self.isDiffusion == True:
+            # Diffusion 
+            for i in range(self.num_cell):
+                for j in range(self.num_cell):
+                    self.grid_copy[i, j] += 0.9*self.grid[i, j]
+                    if i >= 1: self.grid_copy[i-1, j] += 0.025*self.grid[i, j]
+                    if j >= 1: self.grid_copy[i, j-1] += 0.025*self.grid[i, j]
+                    if i < self.num_cell-1: self.grid_copy[i+1, j] += 0.025*self.grid[i, j]
+                    if j < self.num_cell-1: self.grid_copy[i, j+1] += 0.025*self.grid[i, j]
+            #self.grid_copy = np.clip(self.grid_copy, a_min = min, a_max = max) 
+            self.grid = np.copy(self.grid_copy)
+            self.grid_copy = np.zeros((self.num_cell, self.num_cell))
+        if self.isEvaporation == True:
+            # evaporation
+            decay = 2**(-time_elapsed/self.evaporation)
+            for i in range(self.num_cell):
+                for j in range(self.num_cell):
+                    self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
         # dir_name = os.path.dirname('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))

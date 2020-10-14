@@ -122,7 +122,6 @@ class ActorCritic:
         self.value = act_model.value
         self.initial_state = act_model.initial_state
     
-    def 
 class Runner:
     '''
     Runs policy in environment for T time steps

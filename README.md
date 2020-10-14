@@ -7,8 +7,8 @@ Step 0: Download this repositry in your catkin_ws/src
 
 
 Step 1: Open a terminal and run turtlebot3 in Gazebo using the command below:
-roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch (empty world)
-roslaunch turtlebot3_gazebo turtlebot3_mini_arena.launch (for current PPO training, you have to modify the launch file in turtlebot3_gazebo package to load "mini_arena.world" in the world directory) 
+roslaunch turtlebot3_Pheromone turtlebot3_mini_arena.launch (for current PPO training, you have to modify the launch file in turtlebot3_gazebo package to load "mini_arena.world" in the world directory)
+roslaunch Turtlebot3_Pheromone turtlebot3_collision_avoidance.launch (collision avoidance)
 
 Step 2: Open a new terminal and run pheromone.py that generates pheromone grid & update pheromone:
 rosrun Turtlebot3_Pheromone src/pheromone.py

@@ -14,6 +14,9 @@ from math import *
 import time
 import pheromone
 from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
+from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
 
 class ContinuousController:
     # This class offers that changes wheel velocity (vector) depending on pheromone value.
@@ -40,6 +43,15 @@ class ContinuousController:
         except rospy.ServiceException as e:
             print("Service Failed: %s"%e)
 
+        rospy.wait_for_service('phero_reset')
+        try:
+            phero_reset = rospy.ServiceProxy('phero_reset', PheroReset)
+            resp = phero_reset(True)
+            print("Reset Pheromone grid successfully: {}".format(resp))
+        except rospy.ServiceException as e:
+            print("Service Failed %s"%e)
+        self.resetPosition()
+
 
 
     def pheroCallback(self, phero, cargs):
@@ -61,6 +73,24 @@ class ContinuousController:
         vel.angular.z = rotation_velocity
 
         pub.publish(vel)
+    
+    def resetPosition(self):
+        state_msg = ModelState()
+        state_msg.model_name = 'turtlebot3_waffle_pi'
+        state_msg.pose.position.x = 0.0
+        state_msg.pose.position.y = 0.0 
+        state_msg.pose.position.z = 0.0
+        state_msg.pose.orientation.x = 0
+        state_msg.pose.orientation.y = 0
+        state_msg.pose.orientation.z = 0
+        state_msg.pose.orientation.w = 0
+
+        rospy.wait_for_service('/gazebo/set_model_state')
+        try: 
+            set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+            resp = set_state(state_msg)
+        except rospy.ServiceException as e:
+            print("Service Call Failed: %s"%e)
 
 
 class Turtlebot:

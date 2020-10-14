@@ -85,14 +85,14 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 2 # 4 if input linear_x and angular_z
+        self.state_num = 10 # 9 for pheromone 1 for goal distance
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Set target position (stop sign in mini_arena.world)
-        self.target_x = 2.0
-        self.target_y = 0.0
+        self.target_x = 4.5
+        self.target_y = 3.5
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -106,6 +106,7 @@ class Env:
 
         # Miscellanous
         self.ep_len_counter = 0
+        self.dis_rwd_norm = 8
 
     #To be done when real robots are used
     
@@ -128,6 +129,17 @@ class Env:
         state_msg.pose.orientation.z = 0
         state_msg.pose.orientation.w = 0
 
+        # Reset Target Position
+        state_target_msg = ModelState()    
+        state_target_msg.model_name = 'unit_sphere_0_0' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        state_target_msg.pose.position.x = self.target_x
+        state_target_msg.pose.position.y = self.target_y
+        state_target_msg.pose.position.z = 0.0
+        state_target_msg.pose.orientation.x = 0
+        state_target_msg.pose.orientation.y = 0
+        state_target_msg.pose.orientation.z = -0.2
+        state_target_msg.pose.orientation.w = 0
+
         # Reset Pheromone Grid
         #
         #
@@ -138,6 +150,7 @@ class Env:
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
             resp = set_state(state_msg)
+            resp_targ = set_state(state_target_msg)
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
@@ -185,6 +198,13 @@ class Env:
         self.rate.sleep()
         done = False
 
+        # position of turtlebot before taking steps
+        model_state = self.pose_ig.get_msg()
+        pose = model_state.pose[self.model_index]
+        x_previous = pose.position.x
+        y_previous = pose.position.y
+        distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
+
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step and done == False):
             self.pub.publish(self.move_cmd)
@@ -199,54 +219,59 @@ class Env:
         y = pose.position.y
         #print("sample")
         print("x: {}, y: {}".format(x, y))
+
+        # 3. Calculate the distance to goal 
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)
 
-        # 3. Read pheromone (state) from the robot's position 
+        # 4. Read pheromone (state) from the robot's position 
         state = self.phero_ig.get_msg()
         state_arr = np.asarray(state.data)
+        state_arr = np.append(state_arr, distance_to_goal/10.0)
 
-        # 4. State reshape
+        # 5. State reshape
         state = state_arr.reshape(1, self.state_num)
 
-        # 5. Reward assignment
-        ## 5.0. Initialisation of rewards
-        time_penalty = 0.0
+        # 6. Reward assignment
+        ## 6.0. Initialisation of rewards
+        distance_reward = 0.0
         phero_reward = 0.0
         goal_reward = 0.0
         
-        ## 5.1. Time penalty
-        if (done is False):
-            # Timer based
-            # record_time = time.time()
-            # elapsed_time = record_time - start_time
-            # time_penalty = -1*elapsed_time
+        ## 6.1. Distance Reward
+        distance_reward = distance_to_goal_prv - distance_to_goal
+        
+        ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
+        phero_sum = np.sum(state)
+        phero_reward = (-phero_sum)*10 # max phero_r: 0, min phero_r: -9
 
-            # Iteration based
-            time_penalty = -1.0
-        ## 5.2. Pheromone reward (The higher pheromone, the higher reward)
-            phero_avg = np.average(state)
-            phero_reward = phero_avg - 1.0 # max phero: 0, min phero: -1
-
-        ## 5.3. Goal reward
-            if distance_to_goal <= 0.3:
-                goal_reward = 100.0
-                done = True
-                self.reset()
-                time.sleep(1)
+        ## 6.3. Goal reward
+        if distance_to_goal <= 0.3:
+            goal_reward = 100.0
+            done = True
+            self.reset()
+            time.sleep(1)
         ## 5.4. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #
 
-        # 6. Resetting when robot goes too far from the target
-        if distance_to_goal >= 3:
+        # 6. Reset
+        ## 6.1. when robot goes too far from the target
+        if distance_to_goal >= self.dis_rwd_norm:
             self.reset()
             time.sleep(0.5) 
+        ## 6.2. when it collides to the target
+        obs_pos = [[3, 0],[-3, 0],[0,-3],[0,3]]
+        dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2), sqrt((x-obs_pos[1][0])**2+(y-obs_pos[1][1])**2), \
+                    sqrt((x-obs_pos[2][0])**2+(y-obs_pos[2][1])**2), sqrt((x-obs_pos[3][0])**2+(y-obs_pos[3][1])**2)]
+        if dist_obs[0] < 0.02 or dist_obs[1] < 0.02 or dist_obs[2] < 0.02 or dist_obs[3] < 0.02:
+            self.reset()
+            time.sleep(0.5)
 
 
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
-        reward = time_penalty + phero_reward + goal_reward
+        reward = distance_reward*(3/time_step) + phero_reward + goal_reward
         reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
