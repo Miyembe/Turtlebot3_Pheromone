@@ -2,6 +2,7 @@
 foraging_1.npy - quite ugly trial
 foraging_2.npy - s-shape trail
 foraging_straight.py - straight trail
+collision_avoidance_diffused.npy - repellent pheromone has been released in the four area with diffusion.
 
 # HOW TO USE
 1. choose one of the pheromone grid and copy & paste it to the previous directory.

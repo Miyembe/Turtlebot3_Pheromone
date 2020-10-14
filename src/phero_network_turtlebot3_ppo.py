@@ -60,7 +60,7 @@ class PheroTurtlebotPolicy(object):
         self.pdtype = make_pdtype(ac_space)
         print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 10), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 13), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -555,6 +555,8 @@ class PPO:
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     logger_ins.logkv(lossname, lossval)
                 logger_ins.dumpkvs()
+                for (lossval, lossname) in zip(lossvals, model.loss_names):
+                    board_logger.log_scalar(lossname, lossval, update)
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
                 board_logger.flush()
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():

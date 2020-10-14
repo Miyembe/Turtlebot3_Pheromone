@@ -1,2 +1,3 @@
-model_checkpoint_path: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00001r-8.55"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00001r-8.55"
+model_checkpoint_path: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00020r8.17"
+all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00001r-25.27"
+all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00020r8.17"

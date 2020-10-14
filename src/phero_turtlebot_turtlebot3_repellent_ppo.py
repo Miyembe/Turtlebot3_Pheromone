@@ -6,6 +6,7 @@ import tf
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, Point, Quaternion
+import math
 from math import *
 
 
@@ -85,13 +86,13 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 10 # 9 for pheromone 1 for goal distance
+        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Set target position (stop sign in mini_arena.world)
-        self.target_x = 4.5
+        self.target_x = 4
         self.target_y = 3.5
         
         # Last robot positions (to use for stuck indicator)
@@ -106,7 +107,7 @@ class Env:
 
         # Miscellanous
         self.ep_len_counter = 0
-        self.dis_rwd_norm = 8
+        self.dis_rwd_norm = 7
 
     #To be done when real robots are used
     
@@ -189,12 +190,12 @@ class Env:
         record_time_step = 0
 
         # rescaling the action
-        linear_x = 0.5 * (linear_x + 1) # only forward motion
-        angular_z = angular_z
+        linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
+        angular_z_rsc = angular_z
 
-        self.move_cmd.linear.x = linear_x
-        self.move_cmd.angular.z = angular_z
-        action = np.array([linear_x, angular_z])
+        self.move_cmd.linear.x = linear_x_rsc
+        self.move_cmd.angular.z = angular_z_rsc
+        action = np.array([linear_x_rsc, angular_z_rsc])
         self.rate.sleep()
         done = False
 
@@ -212,21 +213,39 @@ class Env:
             record_time = time.time()
             record_time_step = record_time - start_time
 
-        # 2. Read the position of robot
+        # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         pose = model_state.pose[self.model_index]
+        ori = pose.orientation
         x = pose.position.x
         y = pose.position.y
+        angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
+        theta = angles[2]
         #print("sample")
         print("x: {}, y: {}".format(x, y))
 
-        # 3. Calculate the distance to goal 
+        # 3. Calculate the distance & angle difference to goal 
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)
+        global_angle = atan2(self.target_y - y, self.target_x - x)
+        
+        if theta < 0:
+            theta = theta + 2*math.pi
+        if global_angle < 0:
+            global_angle = global_angle + 2*math.pi
+
+        angle_diff = global_angle - theta
+        if angle_diff < -math.pi:
+            angle_diff = angle_diff + 2*math.pi
+        if angle_diff > math.pi:
+            angle_diff = angle_diff - 2*math.pi
 
         # 4. Read pheromone (state) from the robot's position 
         state = self.phero_ig.get_msg()
         state_arr = np.asarray(state.data)
-        state_arr = np.append(state_arr, distance_to_goal/10.0)
+        state_arr = np.append(state_arr, distance_to_goal/self.dis_rwd_norm)
+        state_arr = np.append(state_arr, linear_x)
+        state_arr = np.append(state_arr, angular_z)
+        state_arr = np.append(state_arr, angle_diff)
 
         # 5. State reshape
         state = state_arr.reshape(1, self.state_num)
@@ -242,7 +261,7 @@ class Env:
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
         phero_sum = np.sum(state)
-        phero_reward = (-phero_sum)*10 # max phero_r: 0, min phero_r: -9
+        phero_reward = (-phero_sum)*20 # max phero_r: 0, min phero_r: -9
 
         ## 6.3. Goal reward
         if distance_to_goal <= 0.3:
@@ -250,6 +269,16 @@ class Env:
             done = True
             self.reset()
             time.sleep(1)
+
+        ## 6.4. Angular speed penalty
+        angular_punish_reward = 0.0
+        if angular_z_rsc > 0.8 or angular_z_rsc < -0.8:
+            angular_punish_reward = -1
+        
+        ## 6.5. Linear speed penalty
+        linear_punish_reward = 0.0
+        if linear_x_rsc < 0.2:
+            linear_punish_reward = -2
         ## 5.4. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #
@@ -263,7 +292,7 @@ class Env:
         obs_pos = [[3, 0],[-3, 0],[0,-3],[0,3]]
         dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2), sqrt((x-obs_pos[1][0])**2+(y-obs_pos[1][1])**2), \
                     sqrt((x-obs_pos[2][0])**2+(y-obs_pos[2][1])**2), sqrt((x-obs_pos[3][0])**2+(y-obs_pos[3][1])**2)]
-        if dist_obs[0] < 0.02 or dist_obs[1] < 0.02 or dist_obs[2] < 0.02 or dist_obs[3] < 0.02:
+        if dist_obs[0] < 0.1 or dist_obs[1] < 0.1 or dist_obs[2] < 0.1 or dist_obs[1] < 0.02:
             self.reset()
             time.sleep(0.5)
 
@@ -271,7 +300,7 @@ class Env:
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
-        reward = distance_reward*(3/time_step) + phero_reward + goal_reward
+        reward = distance_reward*(5/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward
         reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
