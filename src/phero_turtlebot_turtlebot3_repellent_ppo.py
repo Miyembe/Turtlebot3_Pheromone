@@ -91,9 +91,9 @@ class Env:
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
-        # Set target position (stop sign in mini_arena.world)
-        self.target_x = 4
-        self.target_y = 3.5
+        # Set target position
+        self.target_x = 4.0
+        self.target_y = 0.0
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -190,6 +190,8 @@ class Env:
         record_time_step = 0
 
         # rescaling the action
+        linear_x = linear_x*0.26
+        linear_x = min(1, max(-1, linear_x))
         linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
         angular_z_rsc = angular_z
 
@@ -221,8 +223,6 @@ class Env:
         y = pose.position.y
         angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
         theta = angles[2]
-        #print("sample")
-        print("x: {}, y: {}".format(x, y))
 
         # 3. Calculate the distance & angle difference to goal 
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)
@@ -241,12 +241,12 @@ class Env:
 
         # 4. Read pheromone (state) from the robot's position 
         state = self.phero_ig.get_msg()
-        state_arr = np.asarray(state.data)
-        state_arr = np.append(state_arr, distance_to_goal/self.dis_rwd_norm)
+        phero_vals = state.data
+        state_arr = np.asarray(phero_vals)
+        state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
         state_arr = np.append(state_arr, angle_diff)
-
         # 5. State reshape
         state = state_arr.reshape(1, self.state_num)
 
@@ -257,14 +257,19 @@ class Env:
         goal_reward = 0.0
         
         ## 6.1. Distance Reward
-        distance_reward = distance_to_goal_prv - distance_to_goal
+        goal_progress = distance_to_goal_prv - distance_to_goal
+        if goal_progress >= 0:
+            distance_reward = goal_progress
+        else:
+            distance_reward = goal_progress * 2
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
-        phero_sum = np.sum(state)
-        phero_reward = (-phero_sum)*20 # max phero_r: 0, min phero_r: -9
-
+        phero_sum = np.sum(phero_vals)
+        phero_reward = (-phero_sum) # max phero_r: 0, min phero_r: -9
+        #print("------------------------")
+        #print("State: {}".format(phero_vals))
         ## 6.3. Goal reward
-        if distance_to_goal <= 0.3:
+        if distance_to_goal <= 0.8:
             goal_reward = 100.0
             done = True
             self.reset()
@@ -279,24 +284,29 @@ class Env:
         linear_punish_reward = 0.0
         if linear_x_rsc < 0.2:
             linear_punish_reward = -2
-        ## 5.4. Collision penalty
+        ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #
 
-        # 6. Reset
-        ## 6.1. when robot goes too far from the target
+        # 7. Reset
+        ## 7.1. when robot goes too far from the target
         if distance_to_goal >= self.dis_rwd_norm:
             self.reset()
             time.sleep(0.5) 
-        ## 6.2. when it collides to the target
-        obs_pos = [[3, 0],[-3, 0],[0,-3],[0,3]]
-        dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2), sqrt((x-obs_pos[1][0])**2+(y-obs_pos[1][1])**2), \
-                    sqrt((x-obs_pos[2][0])**2+(y-obs_pos[2][1])**2), sqrt((x-obs_pos[3][0])**2+(y-obs_pos[3][1])**2)]
-        if dist_obs[0] < 0.1 or dist_obs[1] < 0.1 or dist_obs[2] < 0.1 or dist_obs[1] < 0.02:
+        
+        ## 7.2. when it collides to the target
+        obs_pos = [[2, 0]]
+        dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2)]
+        if dist_obs[0] < 0.1:
+            self.reset()
+            time.sleep(0.5)
+        ## 7.3. when the robot is out of the pheromone grid
+        if abs(x) >= 5 or abs(y) >= 5:
             self.reset()
             time.sleep(0.5)
 
-
+        #print("distance reward: {}".format(distance_reward*(3/time_step)))
+        #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
@@ -304,7 +314,15 @@ class Env:
         reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
-        print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
+        print("-------------------")
+        print("Distance R: {}".format(distance_reward*(5/time_step)))
+        print("Phero R: {}, Phero V: {}".format(phero_reward, phero_sum))
+        #print("Goal R: {}".format(goal_reward))
+        #print("Angular R: {}".format(angular_punish_reward))
+        #print("Linear R: {}".format(linear_punish_reward))
+        print("Reward: {}".format(reward))
+        
+        #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), state, reward, done, info
         
     def print_debug(self):

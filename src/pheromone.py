@@ -49,11 +49,12 @@ class Node():
         self.pheromone.isEvaporation = False
         self.startTime = time.time()
 
-        # # PosToIndex for pheromone circle
-        # x_3, y_3 = self.posToIndex(3,3)
+        # PosToIndex for pheromone circle
+        # x_2, y_0 = self.posToIndex(2,0)
         # x_n3, y_n3 = self.posToIndex(-3,-3)
         # x_0, y_0 = self.posToIndex(0,0)
-        # # Pheromone Initilaisation
+        # Pheromone Initilaisation
+        # self.pheromone.circle(x_2, y_0, 1, 1)
         # self.pheromone.circle(x_3, y_0, 1, 1)
         # self.pheromone.circle(x_n3, y_0, 1, 1)
         # self.pheromone.circle(x_0, y_3, 1, 1)
@@ -131,7 +132,7 @@ class Node():
         for i in range(3):
             for j in range(3):
                 phero_val.data.append(self.pheromone.getPhero(x_index+i-1, y_index+j-1)) # TODO: Randomly select the cell if the values are equal
-        #print("phero_val: {}".format(phero_val.data))
+        #print("phero_avg: {}".format(np.average(np.asarray(phero_val.data))))
         self.pub_phero.publish(phero_val)
         # # Assign pheromone value and publish it
         # phero_val = phero.getPhero(x_index, y_index)
@@ -157,10 +158,10 @@ class Node():
 
         
         '''Saving pheromone'''
-        # Save after 20s
+        # # Save after 20s
         # time_check = time.time()
         # if time_check - self.startTime >= 20 and self.is_saved is False:
-        #     self.pheromone.save("collision_avoidance_diffused")
+        #     self.pheromone.save("simple_collision_diffused")
         #     self.is_saved = True
         
         # Save the pheromone when robot return home.
@@ -183,7 +184,7 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("collision_avoidance_diffused") # you can load any types of pheromone grid
+                self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)

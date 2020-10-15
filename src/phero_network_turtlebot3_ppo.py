@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        print("action_space: {}".format(ac_space))
+        #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, 13), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
@@ -97,8 +97,8 @@ class PheroTurtlebotPolicy(object):
             a, v, neglogp = sess.run([a0, vf, neglogp0], {self.phero: phero})
             # Action clipping (normalising action within the range (-1, 1) for better training)
             # The network will learn what is happening as the training goes.
-            for i in range(a.shape[1]):
-                a[0][i] = min(1.0, max(-1.0, a[0][i]))
+            # for i in range(a.shape[1]):
+            #     a[0][i] = min(1.0, max(-1.0, a[0][i]))
             return a, v, self.initial_state, neglogp
 
         def value(ob, *_args, **_kwargs):
@@ -116,9 +116,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 500, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 500, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 500, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 128, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -138,15 +138,16 @@ class Model(object):
     """
     def __init__(self, policy, ob_space, ac_space, nbatch_act, nbatch_train,
                  nsteps, ent_coef, vf_coef, max_grad_norm, deterministic=False):
-        
+    
         self.sess = sess = self.get_session()
 
         # Create two models
         ## Actor model for sampling
+        print("Pre Model")
         act_model = policy(sess, ob_space, ac_space, nbatch_act, 1, reuse=False, deterministic=deterministic)
         ## Train model for training
         train_model = policy(sess, ob_space, ac_space, nbatch_train, nsteps, reuse=True, deterministic=deterministic)
-
+        print("After Model")
         '''Create Placeholders'''
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
@@ -344,6 +345,7 @@ class Runner(AbstractEnvRunner):
 
             # 20201009 Need to modify these inputs
             self.ids, self.obs, rewards, self.dones, infos = self.env.step(0.1, actions[0][0], actions[0][1])
+
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo: epinfos.append(maybeepinfo)
