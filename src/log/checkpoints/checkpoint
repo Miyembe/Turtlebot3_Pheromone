@@ -1,6 +1,2 @@
-model_checkpoint_path: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00100r1.33"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00020r-2.93"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00040r1.82"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00060r1.24"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00080r0.93"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00100r1.33"
+model_checkpoint_path: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00001r-1.44"
+all_model_checkpoint_paths: "/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/checkpoints/00001r-1.44"

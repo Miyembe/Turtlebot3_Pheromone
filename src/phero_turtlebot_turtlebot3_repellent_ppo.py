@@ -119,6 +119,20 @@ class Env:
         
         self.is_collided = False
 
+        index_list = [-1, 0, 1]
+        index_x = random.choice(index_list)
+
+        if index_x==0:
+            index_list1 = [-1, 1]
+            index_y = random.choice(index_list1)
+        else:
+            index_list1 = [-1, 0, 1]
+            index_y = random.choice(index_list1)
+
+
+        self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
+        self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
+
         # Reset Turtlebot position
         state_msg = ModelState()
         state_msg.model_name = 'turtlebot3_waffle_pi'
@@ -269,7 +283,7 @@ class Env:
         #print("------------------------")
         #print("State: {}".format(phero_vals))
         ## 6.3. Goal reward
-        if distance_to_goal <= 0.8:
+        if distance_to_goal <= 0.4:
             goal_reward = 100.0
             done = True
             self.reset()
@@ -294,12 +308,13 @@ class Env:
             self.reset()
             time.sleep(0.5) 
         
-        ## 7.2. when it collides to the target
-        obs_pos = [[2, 0]]
-        dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2)]
-        if dist_obs[0] < 0.1:
-            self.reset()
-            time.sleep(0.5)
+        ## 7.2. when it collides to the obstacle
+        obs_pos = [[2, 0],[-2,0],[0,2],[0,-2],[1.414,1.414],[1.414,-1.414],[-1.414,-1.414],[-1.414, 1.414]]
+        dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
+        for i in range(len(obs_pos)):
+            if dist_obs[i] < 0.15:
+                self.reset()
+                time.sleep(0.5)
         ## 7.3. when the robot is out of the pheromone grid
         if abs(x) >= 5 or abs(y) >= 5:
             self.reset()
@@ -310,18 +325,19 @@ class Env:
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
-        reward = distance_reward*(5/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward
+        reward = distance_reward*(8/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward
         reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
+        print("Ep: {}".format(self.ep_len_counter))
         print("Distance R: {}".format(distance_reward*(5/time_step)))
         print("Phero R: {}, Phero V: {}".format(phero_reward, phero_sum))
         #print("Goal R: {}".format(goal_reward))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
         print("Reward: {}".format(reward))
-        
+        #print("**********************")
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), state, reward, done, info
         
