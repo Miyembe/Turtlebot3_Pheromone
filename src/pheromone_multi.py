@@ -411,8 +411,8 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone('1', 1, 0)
-    Phero2 = Pheromone('2', 1, 0)
+    Phero1 = Pheromone('1', 0.5, 0)
+    Phero2 = Pheromone('2', 0.5, 0)
     Phero = [Phero1, Phero2]
     node1 = Node(Phero)
     rospy.spin()

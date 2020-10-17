@@ -43,7 +43,7 @@ class AbstractEnvRunner(object):
         nenv = 1
         self.obs = env.reset()
         self.nsteps = nsteps
-        self.states = model.initial_state
+        self.states = [model.initial_state]*self.env.num_robots
         self.dones = [False for _ in range(nenv)]
 
     def run(self):
@@ -58,9 +58,10 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
+        self.num_obs = 13
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 13), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -86,14 +87,12 @@ class PheroTurtlebotPolicy(object):
             '''
             Generate action & value & log probability by inputting one observation into the policy neural net
             '''
-            # 20201009 Should I get just array or single value?
-            phero = ob 
+            phero = [o for o in ob]
+
             # lb = [o["laser"] for o in ob]
             # rb = [o["rel_goal"] for o in ob]
             # vb = [o["velocities"] for o in ob]
 
-            #print(rb)
-            #print("mean: {}, std: {}".format(self.pd.mean, self.pd.std))
             a, v, neglogp = sess.run([a0, vf, neglogp0], {self.phero: phero})
             # Action clipping (normalising action within the range (-1, 1) for better training)
             # The network will learn what is happening as the training goes.
@@ -102,7 +101,7 @@ class PheroTurtlebotPolicy(object):
             return a, v, self.initial_state, neglogp
 
         def value(ob, *_args, **_kwargs):
-            phero = ob
+            phero = [o for o in ob]
             # lb = [o["laser"] for o in ob]
             # rb = [o["rel_goal"] for o in ob]
             # vb = [o["velocities"] for o in ob]
@@ -281,6 +280,7 @@ class Model(object):
         self.saver = tf.train.Saver()
         self.save = save
         self.restore = restore
+        self.num_obs = act_model.num_obs
         tf.global_variables_initializer().run(session=sess) #pylint: disable=E1101
     
     def get_session(self, config=None):
@@ -327,6 +327,7 @@ class Runner(AbstractEnvRunner):
         return arr.swapaxes(0, 1).reshape(s[0] * s[1], *s[2:])
     def run(self):
         # 20201009 ID might not be needed for single robot learning
+        # 20201017 Resize all the array as single row)
         mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
@@ -334,8 +335,8 @@ class Runner(AbstractEnvRunner):
         self.dones = [False] * self.env.num_robots
         for _ in range(self.nsteps):
             #print self.obs
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
             mb_ids.append(self.ids)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
             mb_obs.append(self.obs)
             mb_actions.append(actions)
             mb_values.append(values)
@@ -356,7 +357,6 @@ class Runner(AbstractEnvRunner):
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
-        mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs, self.states, self.dones)
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
@@ -489,6 +489,7 @@ class PPO:
 
             # 1. Run policy and get samples for nsteps
             ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()
+            #print("obs: {}, actions: {}".format(np.asarray(obs).shape, np.asarray(actions).shape))
             epinfobuf.extend(epinfos)
             mblossvals = []
 

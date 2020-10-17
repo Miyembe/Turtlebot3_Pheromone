@@ -239,7 +239,8 @@ class Env:
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
-        twists = [self.action_to_twist(action) for action in actions]
+        #print("Actions form network: {}".format(np.asarray(actions).shape))
+        twists = [self.action_to_twist(action) for action in np.asarray(actions)]
         twists_rsc = [Twist()]*self.num_robots
 
         # rescaling the action
@@ -256,7 +257,6 @@ class Env:
         x_prev = self.x_prev
         y_prev = self.y_prev
         distance_to_goals_prv = [None]*self.num_robots
-        print(self.target[1][1])
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
 
@@ -278,7 +278,7 @@ class Env:
         # 3. Calculate the distance & angle difference to goal \
         distance_to_goals = [None]*self.num_robots
         global_angle = [None]*self.num_robots
-        print("x : {}, y: {}".format(x,y))
+        #print("x : {}, y: {}".format(x,y))
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
@@ -332,7 +332,7 @@ class Env:
         phero_rewards = [-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 6.3. Goal reward
-        print("distance to goal: {}".format(distance_to_goals))
+        #print("distance to goal: {}".format(distance_to_goals))
         for i in range(self.num_robots):
             if distance_to_goals[i] <= 0.8:
                 goal_rewards[i] = 100.0
@@ -389,11 +389,11 @@ class Env:
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
-        print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
-        print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
+        #print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
+        #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
 
-        #print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
-        #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
+        print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
+        print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
         #print("Goal R: {}".format(goal_reward))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
