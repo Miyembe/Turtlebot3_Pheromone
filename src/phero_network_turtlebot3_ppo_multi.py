@@ -43,7 +43,7 @@ class AbstractEnvRunner(object):
         nenv = 1
         self.obs = env.reset()
         self.nsteps = nsteps
-        self.states = [model.initial_state]*self.env.num_robots
+        self.states = model.initial_state
         self.dones = [False for _ in range(nenv)]
 
     def run(self):
