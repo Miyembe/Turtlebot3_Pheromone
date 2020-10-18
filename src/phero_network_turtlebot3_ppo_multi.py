@@ -357,6 +357,7 @@ class Runner(AbstractEnvRunner):
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
+        mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs, self.states, self.dones)
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
@@ -489,6 +490,7 @@ class PPO:
 
             # 1. Run policy and get samples for nsteps
             ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()
+            print("ids {}, obs {}, returns {}, masks {}, actions {}, values {}, neglogpacs {}, states {}, epinfos {}".format(type(ids), type(obs), type(returns), type(masks), type(actions), type(values), type(neglogpacs), type(states), type(epinfos)))
             #print("obs: {}, actions: {}".format(np.asarray(obs).shape, np.asarray(actions).shape))
             epinfobuf.extend(epinfos)
             mblossvals = []
@@ -510,6 +512,7 @@ class PPO:
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
+                        print("mbind: {}".format(mbinds))
                         returns_np = np.asarray(returns[mbinds])
                         # 4. Update weights
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
