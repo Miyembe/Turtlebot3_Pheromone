@@ -173,7 +173,7 @@ class Node():
         ## Two robots inject pheromone in different grids
         if self.is_phero_inj is True:
             for i in range(len(self.pheromone)):
-                phero[i].injection(x_idx[i], y_idx[i], 1, 9, self.phero_max)
+                phero[i].injection(x_idx[i], y_idx[i], 1, 13, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
