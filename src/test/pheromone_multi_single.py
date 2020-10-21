@@ -19,16 +19,22 @@ import time
 from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
 from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
+from turtlebot3_waypoint_navigation.msg import fma
+
 class Node():
 
     def __init__(self, phero):
-        self.pheromone = phero
+        self.num_robots = 1
+        self.pheromone = [None] * self.num_robots
+        for i in range(len(phero)):
+            self.pheromone[i] = phero[i]
         self.phero_max = 1.0
         self.phero_min = 0.0
         self.is_phero_inj = True
 
         # Publisher & Subscribers
-        self.pub_phero = rospy.Publisher('/phero_value', Float32MultiArray, queue_size=10)
+        self.pub_phero = rospy.Publisher('/phero_value', fma, queue_size=10)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback, self.pheromone)
         #self.sub_inj = rospy.Subscriber('/phero_inj', Bool, self.injCallback)
         
@@ -36,6 +42,7 @@ class Node():
         self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign) # Used in continuous controller 
         self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal) # Used in phero_controller (discrete action)
         self.srv_reset = rospy.Service('phero_reset', PheroReset, self.serviceReset)
+        #self.srv_read = rospy.Service('phero_read', PheroRead, self.serviceRead)
         self.is_service_requested = False
         self.theta = 0 
         
@@ -45,71 +52,77 @@ class Node():
         self.is_loaded = False
         self.is_reset = True # False for reset
 
-        self.pheromone.isDiffusion = True
-        self.pheromone.isEvaporation = False
+        for i in range(len(phero)):
+            self.pheromone[i].isDiffusion = False
+            self.pheromone[i].isEvaporation = True
         self.startTime = time.time()
 
-        # PosToIndex for pheromone circle
-        # x_2, y_2 = self.posToIndex(2,2)
-        # x_n2, y_n2 = self.posToIndex(-2,-2)
-        # x_1p4, y_1p4 = self.posToIndex(1.4, 1.4)
-        # x_n1p4, y_n1p4 = self.posToIndex(-1.4, -1.4)
-        # x_0, y_0 = self.posToIndex(0,0)
+        # Robot positions
+        self.x = [0.0, 4.0]
+        self.y = [0.0, 0.0]
+        self.x_idx = [0, 0]
+        self.y_idx = [0, 0]
 
+        # PosToIndex for pheromone circle
+        # x_2, y_0 = self.posToIndex(2,0)
+        # x_n3, y_n3 = self.posToIndex(-3,-3)
+        # x_0, y_0 = self.posToIndex(0,0)
         # Pheromone Initilaisation
-        # self.pheromone.circle(x_2, y_0, 1, 0.7)
-        # self.pheromone.circle(x_n2, y_0, 1, 0.7)
-        # self.pheromone.circle(x_0, y_2, 1, 0.7)
-        # self.pheromone.circle(x_0, y_n2, 1, 0.7)
-        # self.pheromone.circle(x_1p4, y_1p4, 1, 0.5)
-        # self.pheromone.circle(x_1p4, y_n1p4, 1, 0.5)
-        # self.pheromone.circle(x_n1p4, y_n1p4, 1, 0.5)
-        # self.pheromone.circle(x_n1p4, y_1p4, 1, 0.5)
+        # self.pheromone.circle(x_2, y_0, 1, 1)
+        # self.pheromone.circle(x_3, y_0, 1, 1)
+        # self.pheromone.circle(x_n3, y_0, 1, 1)
+        # self.pheromone.circle(x_0, y_3, 1, 1)
+        # self.pheromone.circle(x_0,y_n3, 1, 1)
 
         
 
     def posToIndex(self, x, y):
         phero = self.pheromone
         # Read pheromone value at the robot position
-        res = self.pheromone.resolution
-        round_dp = int(log10(res))
-        x = round(x, round_dp) # round the position value so that they fit into the centre of the cell.
-        y = round(y, round_dp) # e.g. 0.13 -> 0.1
-        x = int(x*res)
-        y = int(y*res)
+        x_index = [0]*len(phero)
+        y_index = [0]*len(phero)
+        for i in range(len(phero)):
+            res = phero[i].resolution
+            round_dp = int(log10(res))
+            x[i] = round(x[i], round_dp) # round the position value so that they fit into the centre of the cell.
+            y[i] = round(y[i], round_dp) # e.g. 0.13 -> 0.1
+            x[i] = int(x[i]*res)
+            y[i] = int(y[i]*res)
         
-        # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
-        x_index = x + (phero.num_cell-1)/2
-        y_index = y + (phero.num_cell-1)/2
-        if x_index < 0 or y_index < 0 or x_index > phero.num_cell-1 or y_index > phero.num_cell-1:
-            raise Exception("The pheromone matrix index is out of range.")
+            # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
+            x_index[i] = x[i] + (phero[i].num_cell-1)/2
+            y_index[i] = y[i] + (phero[i].num_cell-1)/2
+            if x_index[i] < 0 or y_index[i] < 0 or x_index[i] > phero[i].num_cell-1 or y_index[i] > phero[i].num_cell-1:
+                raise Exception("The pheromone matrix index is out of range.")
         return x_index, y_index
 
     def indexToPos(self, x_index, y_index):
-        
-        x = x_index - (self.pheromone.num_cell-1)/2
-        y = y_index - (self.pheromone.num_cell-1)/2
+        phero = self.pheromone[0]
+        x = x_index - (phero.num_cell-1)/2
+        y = y_index - (phero.num_cell-1)/2
 
-        x = float(x) / self.pheromone.resolution
-        y = float(y) / self.pheromone.resolution
+        x = float(x) / phero.resolution
+        y = float(y) / phero.resolution
 
         return x, y
 
     def pheroCallback(self, message, cargs):
         
         # Reading from arguments
-        pose = message.pose[-1]
-        twist = message.twist[-1]
-        pos = pose.position
-        ori = pose.orientation
+        pos = [message.pose[-1].position, message.pose[-2].position] 
+        # twist = message.twist[-[]
+        # ori = pose.orientation
         phero = cargs
-        x = pos.x
-        y = pos.y
+        x = [pos[0].x, pos[1].x]
+        y = [pos[0].y, pos[1].y]
+        x_idx, y_idx = self.posToIndex(x, y)
+        # x = pos.x
+        # y = pos.y
 
-        angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
-        if angles[2] < 0:
-            self.theta = angles[2] + 2*pi
-        else: self.theta = angles[2]
+        # angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
+        # if angles[2] < 0:
+        #     self.theta = angles[2] + 2*pi
+        # else: self.theta = angles[2]
 
         '''
         Pheromone Value Reading
@@ -132,28 +145,42 @@ class Node():
 
         '''9 pheromone values'''
         # Position of 9 cells surrounding the robot
-        x_index, y_index = self.posToIndex(x, y)
-        phero_val = Float32MultiArray()
-        #phero_arr = np.array( )
-        for i in range(3):
-            for j in range(3):
-                phero_val.data.append(self.pheromone.getPhero(x_index+i-1, y_index+j-1))
+        # x_index, y_index = self.posToIndex(x, y)
+        # phero_val = Float32MultiArray()
+        # #phero_arr = np.array( )
+        # for i in range(3):
+        #     for j in range(3):
+        #         phero_val.data.append(self.pheromone[0].getPhero(x_index+i-1, y_index+j-1)) # TODO: Randomly select the cell if the values are equal
         #print("phero_avg: {}".format(np.average(np.asarray(phero_val.data))))
-        self.pub_phero.publish(phero_val)
+        # self.pub_phero.publish(phero_val)
         # # Assign pheromone value and publish it
         # phero_val = phero.getPhero(x_index, y_index)
         # self.pub_phero.publish(phero_val)
         
+        '''Set of pheromone values'''
+        # 9 pheromone value for two robots read from the other's pheromone grid. 
+        phero_arr = [Float32MultiArray()]*self.num_robots
+        phero_val = [None] * self.num_robots
+        #phero_arr = np.array( )
+        for n in range(self.num_robots):
+            phero_val[n] = list()     
+            for i in range(3):
+                for j in range(3):
+                    phero_val[n].append(self.pheromone[n].getPhero(x_idx[n]+i-1, y_idx[n]+j-1)) # Read the other's pheromone
+            phero_arr[n].data = phero_val[n]
+        self.pub_phero.publish(phero_arr)
         # Pheromone injection (uncomment it when injection is needed)
+        ## Two robots inject pheromone in different grids
         # if self.is_phero_inj is True:
-        #     phero.injection(x_index, y_index, 0.2, 5, self.phero_max)
+        #     for i in range(len(self.pheromone)):
+        #         phero[i].injection(x_idx[i], y_idx[i], 1, 13, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
-        # time_cur = time.clock()
-        # if time_cur-phero.step_timer >= 0.1: 
-        #     phero.update(self.phero_min, self.phero_max)
-        #     phero.step_timer = time_cur
+        time_cur = time.clock()
+        if time_cur-phero[0].step_timer >= 0.1: 
+            phero[0].update(self.phero_min, self.phero_max)
+            phero[0].step_timer = time_cur
 
         #log_time_cur = time.clock()
         # Logging Pheromone grid
@@ -167,7 +194,7 @@ class Node():
         # # Save after 20s
         # time_check = time.time()
         # if time_check - self.startTime >= 20 and self.is_saved is False:
-        #     self.pheromone.save("simple_collision_diffused3")
+        #     self.pheromone.save("simple_collision_diffused")
         #     self.is_saved = True
         
         # Save the pheromone when robot return home.
@@ -190,10 +217,40 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
+                for i in range(self.num_robots):  # Reset the pheromone grid
+                    self.pheromone[i].reset()
+                #self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
+                print("Pheromone grid reset!")
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
+
+    def serviceRead(self, req):
+        '''
+        Receive x, y positions and returns pheromone values
+        '''
+        x_values = req.x
+        y_values = req.y
+        x_indices = [None]*len(x_values)
+        y_indices = [None]*len(x_values)
+        for i in range(len(x_values)):
+            x_indices[i], y_indices[i] = self.posToIndex(x_values[i], y_values[i])
+
+        phero_arr = [Float32MultiArray()]*self.num_robots
+        phero_val = [None] * self.num_robots
+        #phero_arr = np.array( )
+        for n in range(len(x_values)):
+            phero_val[n] = list()     
+            for i in range(3):
+                for j in range(3):
+                    phero_val[n].append(self.pheromone[1-n].getPhero(x_indices[n]+i-1, y_indices[n]+j-1)) # Read the other's pheromone
+            phero_arr[n].data = phero_val[n]
+        # self.x = x_values
+        # self.y = y_values
+        # self.x_idx = x_indices
+        # self.y_idx = y_indices
+        return PheroReadResponse(phero_arr)
+
                 
     def injAssign(self, req):
         '''
@@ -239,9 +296,7 @@ class Node():
                     phero_index = np.vstack((phero_index, [i-1, j-1]))
                 phero_value[i,j] = self.pheromone.getPhero(x_index+i-1, y_index+j-1)
                 print("At the point ({}, {}), the pheromone value is {}".format(i,j,self.pheromone.getPhero(x_index+i-1, y_index+j-1)))
-                    #print("Append phero val")
-        print("Phero_index: {}".format(phero_index))
-        print("Phero_value: {}".format(phero_value))
+
 
         # Choose the index as a next goal from the array
         ## Check the front cells (highest priority)
@@ -265,9 +320,10 @@ class Node():
 
 class Pheromone():
 
-    def __init__(self, evaporation, diffusion):
+    def __init__(self, name, evaporation, diffusion):
+        self.name = name
         self.resolution = 10 # grid cell size = 1 m / resolution
-        self.size = 10 # m
+        self.size = 12 # m
         self.num_cell = self.resolution * self.size + 1
         if self.num_cell % 2 == 0:
             raise Exception("Number of cell is even. It needs to be an odd number")
@@ -290,7 +346,7 @@ class Pheromone():
         self.grid[x, y] = value
 
     # Inject pheromone at the robot position and nearby cells in square. Size must be an odd number. 
-    def injection(self, x, y, value, size, max):
+    def injection(self, x, y, value, size, maxp):
         if size % 2 == 0:
             raise Exception("Pheromone injection size must be an odd number.")
         time_cur = time.clock()
@@ -298,12 +354,12 @@ class Pheromone():
             for i in range(size):
                 for j in range(size):
                     self.grid[x-(size-1)/2+i, y-(size-1)/2+j] += value
-                    if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= max:
-                        self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = max
+                    if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= maxp:
+                        self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = maxp
             self.injection_timer = time_cur
 
     def circle(self, x, y, value, radius):
-        radius = int(radius*self.resolution)
+        radius = radius*self.resolution
         for i in range(-radius, radius):
             for j in range(-radius, radius):
                 if sqrt(i**2+j**2) <= radius:
@@ -335,6 +391,9 @@ class Pheromone():
                 for j in range(self.num_cell):
                     self.grid[i, j] = decay * self.grid[i, j]
 
+    def reset(self):
+        self.grid = np.zeros((self.num_cell, self.num_cell))
+
     def save(self, file_name):
         # dir_name = os.path.dirname('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))
         # if not os.path.exists(dir_name):
@@ -352,6 +411,8 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone(180,0)
-    node1 = Node(Phero1)
+    Phero1 = Pheromone('1', 0.5, 0)
+    Phero2 = Pheromone('2', 0.5, 0)
+    Phero = [Phero1]
+    node1 = Node(Phero)
     rospy.spin()
