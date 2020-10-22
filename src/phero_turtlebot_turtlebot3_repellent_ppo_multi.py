@@ -30,6 +30,8 @@ import gym
 import numpy as np
 import random
 
+import scipy.io as sio
+
 
 
 class InfoGetter(object):
@@ -105,13 +107,14 @@ class Env:
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
         self.model_index = -1
-
+        self.model_state = ModelStates()
         self.reset_proxy = rospy.ServiceProxy('gazebo/reset_simulation', Empty)
 
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
         self.just_reset = [False] * self.num_robots
+        self.dones = [False] * self.num_robots
 
     #To be done when real robots are used
     
@@ -130,7 +133,9 @@ class Env:
                     tb3_0 = i
                 if model_state.name[i] == 'tb3_1':
                     tb3_1 = i
-
+        else:
+            tb3_0 = -1
+            tb3_1 = -2
         print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
         # Reset Turtlebot 1 position
@@ -190,6 +195,7 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
+        self.dones = [False] * self.num_robots
 
         return range(0, self.num_robots), initial_state
 
@@ -260,6 +266,7 @@ class Env:
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
+        
         #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
         twists_rsc = [Twist()]*self.num_robots
@@ -272,7 +279,7 @@ class Env:
         angular_z = [i.angular.z for i in twists]
         linear_x_rsc = [i.linear.x for i in twists_rsc]
         angular_z_rsc = [i.angular.z for i in twists_rsc]
-        dones = [False]*self.num_robots
+        dones = self.dones
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -283,15 +290,21 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            ''' publish all the twists_rsc. Find the topic to publish'''
-            self.pub_tb3_0.publish(twists_rsc[0])
-            self.pub_tb3_1.publish(twists_rsc[1])
+            if dones[0] == False:
+                self.pub_tb3_0.publish(twists_rsc[0])
+            else:
+                self.pub_tb3_0.publish(Twist())
+            if dones[1] == False:
+                self.pub_tb3_1.publish(twists_rsc[1])
+            else:
+                self.pub_tb3_1.publish(Twist())
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
-
+        print("linear_x: {}, angular_z: {}".format(linear_x_rsc, angular_z_rsc))
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
+        self.model_state = model_state
         #print("Model State: {}".format(model_state))
         x, y, theta, idx = self.posAngle(model_state)
         self.x_prev = x
@@ -333,6 +346,7 @@ class Env:
         # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
 
+        
         # 6. Reward assignment
         ## 6.0. Initialisation of rewards
         distance_rewards = [0.0]*self.num_robots
@@ -345,57 +359,65 @@ class Env:
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
         for i in range(self.num_robots):
-            if goal_progress[i] < 1:
+            if abs(goal_progress[i]) < 1:
+                print("Goal Progress: {}".format(goal_progress))
                 if goal_progress[i] >= 0:
                         distance_rewards[i] = goal_progress[i]
                 else:
                         distance_rewards[i] = goal_progress[i]
             else:
                 distance_rewards[i] = 0.0
+        for i in range(self.num_robots):
+            if dones[i] == True:
+                distance_rewards[i] = 0.0
         self.just_reset == False
-
+        
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
         phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
-        phero_rewards = [-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
+        phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 6.3. Goal reward
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.4:
+            if distance_to_goals[i] <= 0.4 and dones[i] == False:
                 goal_rewards[i] = 30.0
                 dones[i] = True
             
-        if all(flag == True for flag in dones) == True:
-            self.reset(model_state, id_bots=3)
+        
 
         ## 6.4. Angular speed penalty
         for i in range(self.num_robots):
             if angular_z_rsc[i] > 0.8 or angular_z_rsc[i] < -0.8:
                 angular_punish_rewards[i] = -1
+                if dones[i] == True:
+                    angular_punish_rewards[i] = 0.0
         
         ## 6.5. Linear speed penalty
         for i in range(self.num_robots):
             if linear_x_rsc[i] < 0.2:
                 linear_punish_rewards[i] = -2
+        for i in range(self.num_robots):
+            if dones[i] == True:
+                linear_punish_rewards[i] = 0.0
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
         collision_rewards = [0.0]*self.num_robots
-        if distance_btw_robots <= 0.3:
+        if distance_btw_robots <= 0.3 and dones[i] == False:
             print("Collision!")
             for i in range(self.num_robots):
                 collision_rewards[i] = -30.0
                 dones[i] = True
-                self.reset(model_state, id_bots=3)
-                time.sleep(0.5)
+                #self.reset(model_state, id_bots=3)
         
         ## 6.7. Time penalty
         #  constant time penalty for faster completion of episode
         for i in range(self.num_robots):
-            if dones[i] == False:
-                time_rewards[i] = -1.0
-
+            time_rewards[i] = -1.0
+            if dones[i] == True:
+                time_rewards[i] = 0.0
+        
 
         # 7. Reset
         ## 7.1. when robot goes too far from the target
@@ -410,17 +432,26 @@ class Env:
         #     self.reset()
         #     time.sleep(0.5)
         ## 7.3. when the robot is out of the pheromone grid
+        test_time = time.time()
         for i in range(self.num_robots):
             if abs(x[i]) >= 4.7 or abs(y[i]) >= 4.7:
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
-                time.sleep(0.5)
+                #self.reset(model_state, id_bots=idx[i])
+        
+        ## 7.4. If all the robots are done with tasks, reset
+        if all(flag == True for flag in dones) == True:
+            self.reset(model_state, id_bots=3)
+            for i in range(self.num_robots):
+                dones[i] = False
 
+        self.dones = dones
         #print("distance reward: {}".format(distance_reward*(3/time_step)))
         #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(5/time_step)*3+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        
+        test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
         self.ep_len_counter = self.ep_len_counter + 1
@@ -430,12 +461,13 @@ class Env:
         #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
 
         print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
-        print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
-        print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
-        print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
+        #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
+        #print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
+        #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
-        #print("Reward: {}".format(rewards))
+        print("Reward: {}".format(rewards))
+        print("Time diff: {}".format(test_time-test_time2))
         
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), states, rewards, dones, infos

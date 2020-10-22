@@ -249,7 +249,7 @@ class Model(object):
             '''
             pb, advs, returns, masks, actions, values, neglogpacs = reshape(ids, obs, returns, masks, actions, values, neglogpacs)
             
-            print("pb: {}, advs: {}, returns: {}, masks: {}, actions: {}, values: {}, neglogpacs: {}".format(pb.shape, advs.shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape))
+            #print("pb: {}, advs: {}, returns: {}, masks: {}, actions: {}, values: {}, neglogpacs: {}".format(pb.shape, advs.shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape))
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             
@@ -385,7 +385,7 @@ class Runner(AbstractEnvRunner):
                 mb_advs[t][i] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
             mb_returns = mb_advs + mb_values
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
-                mb_states, epinfos
+                mb_states, epinfos, mb_rewards
 
 class PPO:
     '''
@@ -488,6 +488,7 @@ class PPO:
         3. Optimise Loss w.r.t weights of policy, with K epochs and minibatch size M < N (# of actors) * T (timesteps)
         4. Update weights (in Model class)
         '''
+        step_reward = np.array([0, 0]).reshape(1,2)
         # In every update, one loop of PPO algorithm is executed
         for update in range(1, nupdates+1):
             
@@ -500,10 +501,7 @@ class PPO:
             cliprangenow = cliprange(frac)
 
             # 1. Run policy and get samples for nsteps
-            ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()
-            #print("ids {}, obs {}, returns {}, masks {}, actions {}, values {}, neglogpacs {}, states {}, epinfos {}".format(type(ids), type(obs), type(returns), type(masks), type(actions), type(values), type(neglogpacs), type(states), type(epinfos)))
-            #print("ids {}, obs {}, returns {}, masks {}, actions {}, values {}, neglogpacs {}, states {}, epinfos {}".format(ids.shape, np.asarray(obs).shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape, states.shape, type(epinfos)))
-            #print("obs: {}, actions: {}".format(np.asarray(obs).shape, np.asarray(actions).shape))
+            ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards = runner.run()
             epinfobuf.extend(epinfos)
             mblossvals = []
 
@@ -522,8 +520,6 @@ class PPO:
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
-                        print("mbinds: {}".format(len(mbinds)))
-
                         # 4. Update weights
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
                                         masks[mbinds], actions[mbinds], values[mbinds],
@@ -569,10 +565,17 @@ class PPO:
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     logger_ins.logkv(lossname, lossval)
                 logger_ins.dumpkvs()
+                
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     board_logger.log_scalar(lossname, lossval, update)
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
                 board_logger.flush()
+
+                reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
+                reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
+                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_new])]], axis=0)
+                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward.mat', {'data':step_reward},True,'5',False,False,'row')
+
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
                 if not os.path.isdir(checkdir):

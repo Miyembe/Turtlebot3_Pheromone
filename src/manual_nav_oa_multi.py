@@ -5,6 +5,8 @@ import random
 import tf
 import numpy as np
 import time
+import sys
+import csv
 from gazebo_msgs.msg import ModelStates 
 from gazebo_msgs.msg import ModelState 
 from geometry_msgs.msg import Twist
@@ -53,6 +55,7 @@ class WaypointNavigation:
         self.counter_step = 0
         self.counter_collision = 0
         self.counter_success = 0
+        self.arrival_time = []
         
         self.is_reset = False
         self.is_collided = False
@@ -165,9 +168,9 @@ class WaypointNavigation:
         - Output: Twist() to avoid obstacle
         '''
         # Constants:
-        BIAS = 0.1 #0.0 -successful set
-        V_COEF = 0.35 #0.4
-        W_COEF = 0.9 #0.8
+        BIAS = self.BIAS = 0.1 #0.0 -successful set
+        V_COEF = self.V_COEF = 0.35 #0.4
+        W_COEF = self.W_COEF = 0.9 #0.8
         
         # Initialise values
         avg_phero = np.average(np.asarray(phero)) # values are assigned from the top left (135 deg) to the bottom right (-45 deg) ((0,1,2),(3,4,5),(6,7,8))
@@ -194,22 +197,25 @@ class WaypointNavigation:
     
     def reset(self):
         
-        
-        
-
+        # Increment Collision Counter
         if self.is_collided == True:
             print("Collision!")
             self.counter_collision += 1
 
+        # Increment Arrival Counter and store the arrival time
         if self.is_goal == True:
             print("Arrived goal!")
             self.counter_success += 1
             arrived_timer = time.time()
             art = arrived_timer-self.reset_timer
+            self.arrival_time.append(art)
             print("Episode time: %0.2f"%art)
+
+        # Reset the flags
         self.is_collided = False
         self.is_goal = False
-        # Reset Turtlebot position
+
+        # Reset tb3_0 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
         state_msg.pose.position.x = self.positions[0][0]
@@ -220,7 +226,7 @@ class WaypointNavigation:
         state_msg.pose.orientation.z = 0
         state_msg.pose.orientation.w = 0
 
-        # Reset Target Position
+        # Reset tb3_1 position
         state_target_msg = ModelState()    
         state_target_msg.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
         state_target_msg.pose.position.x = self.positions[1][0]
@@ -233,6 +239,7 @@ class WaypointNavigation:
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
+        # Request service to reset the position of robots
         rospy.wait_for_service('/gazebo/set_model_state')
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -249,6 +256,7 @@ class WaypointNavigation:
         # time.sleep(1)
         # self.pub.publish(self.move_cmd)
 
+        # Request service to reset the pheromone grid
         rospy.wait_for_service('phero_reset')
         try:
             phero_reset = rospy.ServiceProxy('phero_reset', PheroReset)
@@ -257,9 +265,27 @@ class WaypointNavigation:
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
 
+        # Calculate the step counter
         self.counter_step = self.counter_success + self.counter_collision
+        if self.counter_step != 0:
+            succ_percentage = 100*self.counter_success/self.counter_step
+            print("Counter: {}".format(self.counter_step))
+        
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
-            print("Success Rate: {}%".format(100*self.counter_success/self.counter_step))
+            print("Success Rate: {}%".format(succ_percentage))
+        if (self.counter_step == 1):
+            avg_comp = np.average(np.asarray(self.arrival_time))
+            print("100 trials ended. Success rate is: {} and average completion time: {}".format(succ_percentage, avg_comp))
+            file_name = "manual_{}_{}_{}_{}".format(self.num_robots, self.BIAS, self.V_COEF, self.W_COEF)
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(file_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time'])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp])
+            #sys.exit(1)
+            ''' How to exit the program? '''
+            print("why no exit")
+            
+            #quit()
 
         self.is_reset = True
         self.reset_timer = time.time()

@@ -1,0 +1,6 @@
+# To log the pairings of files for experiments
+
+Experiment 2 - Two robots dynamic oa with manual controller
+$roslaunch turtlebot3_waypoint_navigation turtlebot3_dynamic_multi.launch
+$rosrun turtlebot3_waypoint_navigation pheromone_multi.py
+$rosrun turtlebot3_waypoint_navigation manual_nav_oa_multi.py
