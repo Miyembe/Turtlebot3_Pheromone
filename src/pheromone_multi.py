@@ -47,7 +47,7 @@ class Node():
         self.theta = 0 
         
         self.log_timer = time.clock()
-        self.log_file = open("phero_value.txt", "a+")
+        #self.log_file = open("phero_value.txt", "a+")
         self.is_saved = False
         self.is_loaded = False
         self.is_reset = True # False for reset
@@ -78,20 +78,22 @@ class Node():
 
     def posToIndex(self, x, y):
         phero = self.pheromone
+        x_tmp = x
+        y_tmp = y
         # Read pheromone value at the robot position
         x_index = [0]*len(phero)
         y_index = [0]*len(phero)
         for i in range(len(phero)):
             res = phero[i].resolution
             round_dp = int(log10(res))
-            x[i] = round(x[i], round_dp) # round the position value so that they fit into the centre of the cell.
-            y[i] = round(y[i], round_dp) # e.g. 0.13 -> 0.1
-            x[i] = int(x[i]*res)
-            y[i] = int(y[i]*res)
+            x_tmp[i] = round(x_tmp[i], round_dp) # round the position value so that they fit into the centre of the cell.
+            y_tmp[i] = round(y_tmp[i], round_dp) # e.g. 0.13 -> 0.1
+            x_tmp[i] = int(x_tmp[i]*res)
+            y_tmp[i] = int(y_tmp[i]*res)
         
             # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
-            x_index[i] = x[i] + (phero[i].num_cell-1)/2
-            y_index[i] = y[i] + (phero[i].num_cell-1)/2
+            x_index[i] = x_tmp[i] + (phero[i].num_cell-1)/2
+            y_index[i] = y_tmp[i] + (phero[i].num_cell-1)/2
             if x_index[i] < 0 or y_index[i] < 0 or x_index[i] > phero[i].num_cell-1 or y_index[i] > phero[i].num_cell-1:
                 raise Exception("The pheromone matrix index is out of range.")
         return x_index, y_index
@@ -108,14 +110,25 @@ class Node():
 
     def pheroCallback(self, message, cargs):
         
+        for i in range(len(message.name)):
+            if message.name[i] == 'tb3_0':
+                tb3_0 = i
+                #print("tb3: {}".format(tb3))
+                #print("name: {}".format(message.name[tb3]))
+            if message.name[i] == 'tb3_1':
+                tb3_1 = i
         # Reading from arguments
-        pos = [message.pose[-1].position, message.pose[-2].position] 
+        pos = [message.pose[tb3_0].position, message.pose[tb3_1].position] 
         # twist = message.twist[-[]
         # ori = pose.orientation
+        #print("pos0x: {}".format(pos[0].x))
         phero = cargs
         x = [pos[0].x, pos[1].x]
         y = [pos[0].y, pos[1].y]
         x_idx, y_idx = self.posToIndex(x, y)
+        x = [pos[0].x, pos[1].x]
+        y = [pos[0].y, pos[1].y]
+        #print("robot 1 ({},{}), robot 2 ({}, {})".format(x[0],y[0],x[1],y[1]))
         # x = pos.x
         # y = pos.y
 
@@ -173,7 +186,7 @@ class Node():
         ## Two robots inject pheromone in different grids
         if self.is_phero_inj is True:
             for i in range(len(self.pheromone)):
-                phero[i].injection(x_idx[i], y_idx[i], 1, 13, self.phero_max)
+                phero[i].injection(x_idx[i], y_idx[i], 1, 11, self.phero_max)
 
 
         # Update pheromone matrix in every 0.1s
@@ -359,11 +372,17 @@ class Pheromone():
             self.injection_timer = time_cur
 
     def circle(self, x, y, value, radius):
-        radius = radius*self.resolution
+        radius = int(radius*self.resolution)
         for i in range(-radius, radius):
             for j in range(-radius, radius):
                 if sqrt(i**2+j**2) <= radius:
                     self.grid[x+i, y+j] = value
+    def gradCircle(self, x, y, value, radius):
+        radius = int(radius*self.resolution)
+        for i in range(-radius, radius):
+            for j in range(-radius, radius):
+                if sqrt(i**2+j**2) <= radius:
+                    self.grid[x+i, y+j] = value/(exp(sqrt(i**2+j**2))/10)
 
     
     # Update all the pheromone values depends on natural phenomena, e.g. evaporation
@@ -411,8 +430,8 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone('1', 0.5, 0)
-    Phero2 = Pheromone('2', 0.5, 0)
+    Phero1 = Pheromone('1', 0.1, 0)
+    Phero2 = Pheromone('2', 0.1, 0)
     Phero = [Phero1, Phero2]
     node1 = Node(Phero)
     rospy.spin()
