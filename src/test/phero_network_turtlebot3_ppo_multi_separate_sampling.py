@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 128, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -247,7 +247,8 @@ class Model(object):
             '''
             Put values into placeholders and train the policy neural network
             '''
-            pb, advs, returns, masks, actions, values, neglogpacs = reshape(ids, obs, returns, masks, actions, values, neglogpacs)
+            pb = obs
+            advs = returns - values
             
             #print("pb: {}, advs: {}, returns: {}, masks: {}, actions: {}, values: {}, neglogpacs: {}".format(pb.shape, advs.shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape))
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
@@ -331,33 +332,49 @@ class Runner(AbstractEnvRunner):
     def run(self):
         # 20201009 ID might not be needed for single robot learning
         # 20201017 Resize all the array as single row)
-        mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
+        mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [[],[]],[[],[]],[[],[]],[[],[]],[[],[]],[[],[]],[[],[]]
         mb_states = self.states
         epinfos = []
-        if self.reset_counter > 1:
+        if self.reset_counter == 4:
             self.ids, self.obs = self.env.reset()
             self.reset_counter = 0
         else: 
             self.reset_counter += 1
         self.dones = [False] * self.env.num_robots
-        for _ in range(self.nsteps):
-            #print self.obs
-            mb_ids.append(self.ids)
+        t_sum = 0
+        while (t_sum < self.nsteps):
+            idx = self.ids # self.ids should return id numbers (0,1). 
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
-            mb_obs.append(self.obs)
-            mb_actions.append(actions)
-            mb_values.append(values)
-            mb_neglogpacs.append(neglogpacs)
-            mb_dones.append(self.dones)
+            if idx == range(self.env.num_robots):               
+                for i in range(len(idx)):
+                    mb_ids[i].append(1)
+                    mb_obs[i].append(self.obs[i])
+                    mb_actions[i].append(actions[i])
+                    mb_values[i].append(values[i])
+                    mb_neglogpacs[i].append(neglogpacs[i])
+                    mb_dones[i].append(self.dones[i])
+            else:
+                mb_ids[idx].append(1) 
+                mb_obs[idx].append(self.obs)
+                mb_actions[idx].append(actions)
+                mb_values[idx].append(values)
+                mb_neglogpacs[idx].append(neglogpacs)
+                mb_dones[idx].append(self.dones)
 
-            # 20201009 Need to modify these inputs
-            self.ids, self.obs, rewards, self.dones, infos = self.env.step(actions, 0.1)
+                # 20201009 Need to modify these inputs
+            self.ids, self.obs, rewards, self.dones, infos = self.env.step(actions, 0.1) # 1 1 2 2 2
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo: epinfos.append(maybeepinfo)
-            mb_rewards.append(rewards)
+            if len(idx) == self.env.num_robots:
+                for i in range(len(idx)):
+                    mb_rewards[i].append(rewards[i])
+            else:
+                mb_rewards[idx].append(rewards)
+            t_sum = np.sum(np.asarray([len(rwd) for rwd in mb_rewards]))
+                
         #batch of steps to batch of rollouts
-        #mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
+        mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_ids = np.asarray(mb_ids)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
@@ -370,20 +387,23 @@ class Runner(AbstractEnvRunner):
         mb_advs = np.zeros_like(mb_rewards)
         for i in range(self.env.num_robots):
             lastgaelam = 0
-            for t in reversed(range(self.nsteps)):
-                if t == self.nsteps - 1:
+            for t in reversed(range(len(mb_rewards[i]))):
+                if t == len(mb_rewards[i]) - 1:
                     nextnonterminal = 1.0 - self.dones[i]
-                    nextvalues = last_values[i]
+                    if len(last_values) == self.env.num_robots:
+                        nextvalues = last_values[i]
+                    else:
+                        nextvalues = last_values
                     #print("nextvalues: {}".format(nextvalues))
                 else:
-                    nextnonterminal = 1.0 - mb_dones[t+1][i]
-                    nextvalues = mb_values[t+1][i]
+                    nextnonterminal = 1.0 - mb_dones[i][t+1]
+                    nextvalues = mb_values[i][t+1]
                     #print("nextvalues: {}".format(nextvalues))
-                delta = mb_rewards[t][i] + self.gamma * nextvalues * nextnonterminal - mb_values[t][i]
+                delta = mb_rewards[i][t] + self.gamma * nextvalues * nextnonterminal - mb_values[i][t]
                 #print("delta: {}".format(delta))
                 #print("mb_rewards: {}, mb_values: {}, self.gamma: {}, nextvalues: {}, nextnonterminal: {}".format(mb_rewards[t][i], mb_values[t][i], self.gamma, nextvalues, nextnonterminal))
-                mb_advs[t][i] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
-            mb_returns = mb_advs + mb_values
+                mb_advs[i][t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
+            mb_returns[i] = mb_advs[i] + mb_values[i]
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
                 mb_states, epinfos, mb_rewards
 
@@ -423,6 +443,25 @@ class PPO:
         def f(_):
             return val
         return f
+
+    def reshape1d(self, arr):
+            return np.reshape(arr, (len(arr)*len(arr[0])), 'C')
+    def reshape2d(self, arr):
+            return np.reshape(arr, (len(arr)*len(arr[0]), len(arr[0][0])), 'C')
+
+    def reshapeData(self, ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards):
+            ids = self.reshape1d(ids) 
+            obs = self.reshape2d(obs)
+            returns = self.reshape1d(returns)
+            masks = self.reshape1d(masks) 
+            actions = self.reshape2d(actions) 
+            values = self.reshape1d(values)
+            neglogpacs = self.reshape1d(neglogpacs) 
+            #states = self.reshape1d(states)
+            #epinfos = self.reshape1d(epinfos)
+            rewards = self.reshape1d(rewards)
+
+            return ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards
 
     def learn(self):
         # For logging
@@ -502,6 +541,10 @@ class PPO:
 
             # 1. Run policy and get samples for nsteps
             ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards = runner.run()
+
+            # 1.1. Reshape the data into 1D array.
+            ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards = self.reshapeData(ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards)
+            
             epinfobuf.extend(epinfos)
             mblossvals = []
 
@@ -520,6 +563,7 @@ class PPO:
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
+                        print("obs: {}, rewards: {}".format(obs.shape, rewards.shape))
                         # 4. Update weights
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
                                         masks[mbinds], actions[mbinds], values[mbinds],
@@ -562,10 +606,11 @@ class PPO:
                 logger_ins.logkv('eprewmean', self.safemean([epinfo['r'] for epinfo in epinfobuf]))
                 logger_ins.logkv('eplenmean', self.safemean([epinfo['l'] for epinfo in epinfobuf]))
                 logger_ins.logkv('time_elapsed', tnow - tfirststart)
+                
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     logger_ins.logkv(lossname, lossval)
                 logger_ins.dumpkvs()
-                
+
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     board_logger.log_scalar(lossname, lossval, update)
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
@@ -592,7 +637,7 @@ class PPO:
 
 def main():
     env = phero_turtlebot_turtlebot3_repellent_ppo_multi.Env()
-    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
+    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=64, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,

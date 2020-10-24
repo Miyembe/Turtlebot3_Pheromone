@@ -258,7 +258,7 @@ class Env:
         return tmp
 
     def step(self, actions, time_step=0.1):
-        # 20201010 How can I make the action input results in the change in state?
+        # 20201022 Actions can be 2*2 or 1*2
         # I read tensorswarm, and it takes request and go one step.
         # It waited until m_loop_done is True - at the end of the post step.
         
@@ -266,20 +266,38 @@ class Env:
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
-        
+        dones = self.dones
+        print("dones: {}".format(dones))
+        idx = 2
+        if dones[0] == False and dones[1] == False:
+            idx = 2
+        elif dones[0] == False:
+            idx = 0
+        elif dones[1] == False:
+            idx = 1
+        elif dones[0] == True and dones[1] == True:
+            idx = 3
+
         #print("Actions form network: {}".format(np.asarray(actions).shape))
+
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        twists_rsc = [Twist()]*self.num_robots
+        twists_rsc = [Twist()]*len(twists) # len of twists can vary
 
         # rescaling the action
         for i in range(len(twists)):
             twists_rsc[i].linear.x = 0.5 * (twists[i].linear.x + 1) # only forward motion
             twists_rsc[i].angular.z = twists[i].angular.z
-        linear_x = [i.linear.x for i in twists]
-        angular_z = [i.angular.z for i in twists]
-        linear_x_rsc = [i.linear.x for i in twists_rsc]
-        angular_z_rsc = [i.angular.z for i in twists_rsc]
-        dones = self.dones
+        if idx == 2:
+            linear_x = [i.linear.x for i in twists]
+            angular_z = [i.angular.z for i in twists]
+            linear_x_rsc = [i.linear.x for i in twists_rsc]
+            angular_z_rsc = [i.angular.z for i in twists_rsc]
+        elif idx != 2 and len(twists) == 2:
+            linear_x = twists[idx].linear.x
+            angular_z = twists[idx].angular.z
+            linear_x_rsc = twists_rsc[idx].linear.x
+            angular_z_rsc = twists[idx].angular.z
+        
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -290,18 +308,23 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            self.pub_tb3_0.publish(twists_rsc[0])
-            self.pub_tb3_1.publish(twists_rsc[1])
-
+            if dones[0] == False:
+                self.pub_tb3_0.publish(twists_rsc[0])
+            else:
+                self.pub_tb3_0.publish(Twist())
+            if dones[1] == False:
+                self.pub_tb3_1.publish(twists_rsc[0])
+            else:
+                self.pub_tb3_1.publish(Twist())
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
-        print("linear_x: {}, angular_z: {}".format(linear_x_rsc, angular_z_rsc))
+
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
         #print("Model State: {}".format(model_state))
-        x, y, theta, idx = self.posAngle(model_state)
+        x, y, theta, ids = self.posAngle(model_state)
         self.x_prev = x
         self.y_prev = y
 
@@ -332,29 +355,42 @@ class Env:
         #phero_vals = [phero for phero in phero_rev]
         
         # Concatenating the state array
-        state_arr = np.asarray(phero_vals)
-        state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
-        state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
-        state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
-        state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
-
+        if idx == 2:
+            state_arr = phero_vals = np.asarray(phero_vals)
+            state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
+            state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
+            state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
+            state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
+        else:
+            print(idx)
+            state_arr = phero_vals = np.asarray(phero_vals[idx]).reshape(1, len(phero_vals[idx]))
+            state_arr = np.hstack((state_arr, np.asarray(distance_to_goals[idx]).reshape(1,1)))
+            state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(1,1)))
+            state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(1,1)))
+            state_arr = np.hstack((state_arr, np.asarray(angle_diff[idx]).reshape(1,1)))
+            
+        
+        
         # 5. State reshape
-        states = state_arr.reshape(self.num_robots, self.state_num)
-
+        if idx != 2:
+            states = state_arr.reshape(1, self.state_num)
+        else:
+            states = state_arr.reshape(len(twists), self.state_num)
         
         # 6. Reward assignment
         ## 6.0. Initialisation of rewards
-        distance_rewards = [0.0]*self.num_robots
-        phero_rewards = [0.0]*self.num_robots
-        goal_rewards = [0.0]*self.num_robots
-        angular_punish_rewards = [0.0]*self.num_robots
-        linear_punish_rewards = [0.0]*self.num_robots
-        time_rewards = [0.0]*self.num_robots        
+        distance_rewards = [0.0]*len(twists)
+        phero_rewards = [0.0]*len(twists)
+        goal_rewards = [0.0]*len(twists)
+        angular_punish_rewards = [0.0]*len(twists)
+        linear_punish_rewards = [0.0]*len(twists)
+        time_rewards = [0.0]*len(twists)
+        collision_rewards = [0.0]*len(twists)
         ## 6.1. Distance Reward
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
-        for i in range(self.num_robots):
-            if abs(goal_progress[i]) < 0.1:
+        for i in range(len(twists)):
+            if abs(goal_progress[i]) < 1:
                 print("Goal Progress: {}".format(goal_progress))
                 if goal_progress[i] >= 0:
                         distance_rewards[i] = goal_progress[i]
@@ -362,55 +398,64 @@ class Env:
                         distance_rewards[i] = goal_progress[i]
             else:
                 distance_rewards[i] = 0.0
-        # for i in range(self.num_robots):
-        #     if dones[i] == True:
-        #         distance_rewards[i] = 0.0
+        for i in range(len(twists)):
+            if dones[i] == True:
+                distance_rewards[i] = 0.0
         self.just_reset == False
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
         phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
-        phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
+        phero_rewards = [0.0]*len(twists)#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 6.3. Goal reward
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
-        for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.5 and dones[i] == False:
-                goal_rewards[i] = 50.0
+        for i in range(len(twists)):
+            if distance_to_goals[i] <= 0.4 and dones[i] == False:
+                goal_rewards[i] = 30.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
-
             
         
 
         ## 6.4. Angular speed penalty
-        for i in range(self.num_robots):
-            if abs(angular_z_rsc[i])>0.8:
-                angular_punish_rewards[i] = -1
-                if dones[i] == True:
-                    angular_punish_rewards[i] = 0.0
-        
+        if len(twists) == 2:
+            for i in range(len(twists)):
+                if angular_z_rsc[i] > 0.8 or angular_z_rsc[i] < -0.8:
+                    angular_punish_rewards[i] = -1
+                    if dones[i] == True:
+                        angular_punish_rewards[i] = 0.0
+        else:
+            if abs(angular_z_rsc) > 0.8:
+                angular_punish_rewards = -1
+                if dones[idx] == True:
+                    angular_punish_reward = 0.0
         ## 6.5. Linear speed penalty
-        for i in range(self.num_robots):
-            if linear_x_rsc[i] < 0.2:
-                linear_punish_rewards[i] = -2
-        for i in range(self.num_robots):
-            if dones[i] == True:
-                linear_punish_rewards[i] = 0.0
+        if len(twists) == 2:
+            for i in range(len(twists)):
+                if linear_x_rsc[i] < 0.2:
+                    linear_punish_rewards[i] = -2
+            for i in range(len(twists)):
+                if dones[i] == True:
+                    linear_punish_rewards[i] = 0.0
+        else: 
+            if linear_x_rsc < 0.2:
+                linear_punish_rewards = -2
+            if dones[idx] == True:
+                linear_punish_rewards = 0.0
+
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
-        collision_rewards = [0.0]*self.num_robots
         if distance_btw_robots <= 0.3 and dones[i] == False:
             print("Collision!")
-            for i in range(self.num_robots):
-                collision_rewards[i] = -40.0
+            for i in range(len(twists)):
+                collision_rewards[i] = -30.0
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
         
         ## 6.7. Time penalty
         #  constant time penalty for faster completion of episode
-        for i in range(self.num_robots):
+        for i in range(len(twists)):
             time_rewards[i] = -1.0
             if dones[i] == True:
                 time_rewards[i] = 0.0
@@ -433,7 +478,7 @@ class Env:
         for i in range(self.num_robots):
             if abs(x[i]) >= 4.7 or abs(y[i]) >= 4.7:
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
         
         ## 7.4. If all the robots are done with tasks, reset
         if all(flag == True for flag in dones) == True:
@@ -446,10 +491,10 @@ class Env:
         #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(5/time_step)*3+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
         
         test_time2 = time.time()
-        rewards = np.asarray(rewards).reshape(self.num_robots)
+        rewards = np.asarray(rewards).reshape(len(twists))
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
@@ -457,18 +502,36 @@ class Env:
         #print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
         #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
 
-        print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
+        #print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
         #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
         #print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
         #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
-        print("Linear: {}, Angular: {}".format(linear_x_rsc, angular_z_rsc))
         print("Reward: {}".format(rewards))
         print("Time diff: {}".format(test_time-test_time2))
         
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
-        return range(0, self.num_robots), states, rewards, dones, infos
+        ''' Need to change idx '''
+
+        if idx == 0:
+            states = states.reshape(1,self.state_num)
+        if idx == 1:
+            states = states.reshape(1,self.state_num)
+            
+        if dones[0] == False and dones[1] == False:
+            idx = range(self.num_robots)
+        elif dones[0] == False:
+            idx = 0
+        elif dones[1] == False:
+            idx = 1
+        elif dones[0] == True and dones[1] == True:
+            idx = 3
+        
+        
+        #print("states: {}, size: {}".format(states, states.shape))
+        print("state shape: {}".format(states.shape))
+        return idx, states, rewards, dones, infos
         
     def print_debug(self):
 

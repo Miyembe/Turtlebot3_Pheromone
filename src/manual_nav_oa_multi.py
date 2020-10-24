@@ -45,6 +45,25 @@ class WaypointNavigation:
         self.goal = [[4,0], [0,0]]
         self.obstacle = [2,0]
 
+        # Initialise parameters
+        
+        self.step_size = 0.1
+        self.b_range = np.arange(0, 1+self.step_size, self.step_size)
+        self.v_range = np.arange(0.1, 1+self.step_size, self.step_size)
+        self.w_range = np.arange(0.1, 1+self.step_size, self.step_size)
+
+        self.BIAS = self.b_range[0]
+        self.V_COEF = self.v_range[0]
+        self.W_COEF = self.w_range[0]
+
+        self.b_size = self.b_range.size        
+        self.v_size = self.v_range.size
+        self.w_size = self.w_range.size
+        
+        self.b_counter = 0
+        self.v_counter = 0
+        self.w_counter = 0
+
         # Initialise ros related topics
         self.pub_tb3_0 = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=1)
         self.pub_tb3_1 = rospy.Publisher('/tb3_1/cmd_vel', Twist, queue_size=1)
@@ -155,22 +174,32 @@ class WaypointNavigation:
     
     # Angular velocity coefficient (When avg phero is high, it is more sensitive)
     def velCoef(self, value1, value2):
+        '''
+        - val_avg (0, 1)
+        - val_dif (-1, 1)
+        - dif_coef (1, 2.714)
+        - coefficient (-2.714, 2.714)
+        '''
         val_avg = (value1 + value2)/2
         val_dif = value1 - value2
         dif_coef = exp(val_avg)
+        coefficient = dif_coef*val_dif
         
-        return dif_coef*val_dif
+        return coefficient
         
     def PheroOA(self, phero):
         '''
         Pheromone-based obstacle avoidance algorithm
         - Input: 9 cells of pheromone
         - Output: Twist() to avoid obstacle
+        - 20201023 - Can I set the v and w range? v(0, 1), w(-1, 1)
+        - v = BIAS (0, 1) + V_COEF (0, 1) * avg_phero(0, 1) // (0, 2)
+        - w = W_COEF (0, 1) * (1/3) * theta (-pi, pi) // (-1, 1) 
         '''
         # Constants:
-        BIAS = self.BIAS = 0.1 #0.0 -successful set
-        V_COEF = self.V_COEF = 0.35 #0.4
-        W_COEF = self.W_COEF = 0.9 #0.8
+        BIAS = self.BIAS #0.1 -successful set
+        V_COEF = self.V_COEF #0.35                 # How fast it will go forward depending on the avg pheromone value
+        W_COEF = self.W_COEF #0.9                   # How fast it will turn around depending on the pheromone difference
         
         # Initialise values
         avg_phero = np.average(np.asarray(phero)) # values are assigned from the top left (135 deg) to the bottom right (-45 deg) ((0,1,2),(3,4,5),(6,7,8))
@@ -186,11 +215,11 @@ class WaypointNavigation:
         vec_coefs = np.asarray(vec_coefs).reshape(4,1)
         vel_vecs = np.multiply(unit_vecs, vec_coefs)
         vel_vec = np.sum(vel_vecs, axis=0)
-
-        ang_vel = W_COEF*atan2(vel_vec[1], vel_vec[0])
+        theta = atan2(vel_vec[1], vel_vec[0]) 
+        ang_vel = W_COEF*(1/3)*theta
 
         # Velocity assignment
-        twist.linear.x = BIAS + V_COEF*avg_phero
+        twist.linear.x = 0.5*(BIAS + V_COEF*avg_phero)
         twist.angular.z = ang_vel
 
         return twist
@@ -272,24 +301,55 @@ class WaypointNavigation:
             print("Counter: {}".format(self.counter_step))
         
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
+            print("BIAS: {}, V_COEF: {}, W_COEF: {}".format(self.BIAS, self.V_COEF, self.W_COEF))
             print("Success Rate: {}%".format(succ_percentage))
-        if (self.counter_step == 1):
+
+        if (self.counter_step % 20 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
-            print("100 trials ended. Success rate is: {} and average completion time: {}".format(succ_percentage, avg_comp))
+            std_comp = np.std(np.asarray(self.arrival_time))
+            print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
             file_name = "manual_{}_{}_{}_{}".format(self.num_robots, self.BIAS, self.V_COEF, self.W_COEF)
             with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time'])
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp])
-            #sys.exit(1)
-            ''' How to exit the program? '''
-            print("why no exit")
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             
+            self.paramUpdate()
+
+            ''' How to exit the program? '''
+            #print("why no exit")
+            #sys.exit(1)
             #quit()
 
         self.is_reset = True
         self.reset_timer = time.time()
 
+    def paramUpdate(self):
+        '''
+        - (0,0,0) -> (4,4,4)
+        '''
+        print("Parameters are updated!")
+        if (self.w_counter < self.w_size-1):
+            self.w_counter += 1
+            self.W_COEF = self.w_range[self.w_counter]
+        elif (self.v_counter < self.v_size-1):
+            self.w_counter = 0
+            self.v_counter += 1
+            self.W_COEF = self.w_range[self.w_counter]
+            self.V_COEF = self.v_range[self.v_counter]
+        elif (self.b_counter < self.b_size-1):
+            self.w_counter = 0
+            self.v_counter = 0
+            self.b_counter += 1
+            self.W_COEF = self.w_range[self.w_counter]
+            self.V_COEF = self.v_range[self.v_counter]
+            self.BIAS = self.b_range[self.b_counter]
+        else:
+            print("Finish Iteration of parameters")
+            sys.exit()
+
+
+        
 
 if __name__ == '__main__':
     rospy.init_node('pose_reading')
