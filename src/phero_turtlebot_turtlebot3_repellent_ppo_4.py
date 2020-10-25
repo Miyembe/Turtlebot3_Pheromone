@@ -448,11 +448,18 @@ class Env:
                 linear_punish_rewards[i] = 0.0
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
-        distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
+        #   it needs to be rewritten to really detect collision
+        distance_btw_robots = [[10.0]*(self.num_robots)]*self.num_robots
+        for i in range(self.num_robots):
+            for j in range(self.num_robots):
+                if j != i:
+                    distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2)
+        
+
         collision_rewards = [0.0]*self.num_robots
-        if distance_btw_robots <= 0.3 and dones[i] == False:
-            print("Collision!")
-            for i in range(self.num_robots):
+        for i in range(self.num_robots):
+            if any(dis <= 0.3 for dis in distance_btw_robots[i]) == True and dones[i] == False:
+                print("Collision!")
                 collision_rewards[i] = -40.0
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
