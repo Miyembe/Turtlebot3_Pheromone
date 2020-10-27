@@ -574,7 +574,7 @@ class PPO:
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
                 reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
                 step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_new])]], axis=0)
-                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward.mat', {'data':step_reward},True,'5',False,False,'row')
+                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward_{}.mat'.format(time_str), {'data':step_reward},True,'5',False,False,'row')
 
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
@@ -596,7 +596,7 @@ def main():
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,
-                total_timesteps=5000000,
+                total_timesteps=3000000,
                 deterministic=False)
     PPO_a.learn()
 

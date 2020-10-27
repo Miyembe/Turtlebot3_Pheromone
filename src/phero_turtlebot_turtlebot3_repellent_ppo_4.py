@@ -101,11 +101,11 @@ class Env:
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Previous positions
-        self.x_prev = [0.0, 5.0, 2.5, 2.5]#[0.0, 2.0] # [0.0,4.0]
+        self.x_prev = [-2.5, 2.5, 0.0, 0.0]#[0.0, 2.0] # [0.0,4.0]
         self.y_prev = [0.0, 0.0, -2.5, 2.5] #[0.0, -2.0]  # [0.0,0.0]
 
         # Set target position
-        self.target = [[5.0, 0.0], [0.0, 0.0], [2.5, 2.5], [2.5, -2.5]]#[[4.0, 0.0], [2.0, 2.0]] # Two goal (crossing scenario) # [[4.0,0.0], [0.0,0.0]]
+        self.target = [[2.5, 0.0], [-2.5, 0.0], [0.0, 2.5], [0.0, -2.5]]#[[4.0, 0.0], [2.0, 2.0]] # Two goal (crossing scenario) # [[4.0,0.0], [0.0,0.0]]
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
         self.model_index = -1
@@ -152,7 +152,7 @@ class Env:
         # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = 0.0
+        state_msg.pose.position.x = -2.5
         state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
         state_msg.pose.orientation.x = 0
@@ -163,7 +163,7 @@ class Env:
         # Reset Turtlebot 2 Position
         state_msg2 = ModelState()    
         state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg2.pose.position.x = 5.0
+        state_msg2.pose.position.x = 2.5
         state_msg2.pose.position.y = 0.0
         state_msg2.pose.position.z = 0.0
         state_msg2.pose.orientation.x = 0
@@ -175,7 +175,7 @@ class Env:
 
         state_msg3 = ModelState()    
         state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg3.pose.position.x = 2.5
+        state_msg3.pose.position.x = 0.0
         state_msg3.pose.position.y = -2.5
         state_msg3.pose.position.z = 0.0
         state_msg3.pose.orientation.x = 0
@@ -187,7 +187,7 @@ class Env:
 
         state_msg4 = ModelState()    
         state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg4.pose.position.x = 2.5
+        state_msg4.pose.position.x = 0.0
         state_msg4.pose.position.y = 2.5
         state_msg4.pose.position.z = 0.0
         state_msg4.pose.orientation.x = 0
@@ -206,12 +206,16 @@ class Env:
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
             if id_bots == 999 or id_bots == tb3_0:
                 resp = set_state(state_msg)
+                self.dones[0] = False
             if id_bots == 999 or id_bots == tb3_1:
                 resp2 = set_state(state_msg2)
+                self.dones[1] = False
             if id_bots == 999 or id_bots == tb3_2:
                 resp3 = set_state(state_msg3)
+                self.dones[2] = False
             if id_bots == 999 or id_bots == tb3_3:
                 resp4 = set_state(state_msg4)
+                self.dones[3] = False
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
@@ -249,10 +253,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.26
+        t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = action[1]
+        t.angular.z = min(1, max(-1, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -442,14 +446,14 @@ class Env:
         ## 6.5. Linear speed penalty
         for i in range(self.num_robots):
             if linear_x_rsc[i] < 0.2:
-                linear_punish_rewards[i] = -2
+                linear_punish_rewards[i] = -0.0
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #   it needs to be rewritten to really detect collision
-        distance_btw_robots = [[10.0]*(self.num_robots)]*self.num_robots
+        distance_btw_robots = np.ones([self.num_robots, self.num_robots])
         for i in range(self.num_robots):
             for j in range(self.num_robots):
                 if j != i:
@@ -460,9 +464,9 @@ class Env:
         for i in range(self.num_robots):
             if any(dis <= 0.3 for dis in distance_btw_robots[i]) == True and dones[i] == False:
                 print("Collision!")
-                collision_rewards[i] = -40.0
+                collision_rewards[i] = -50.0
                 dones[i] = True
-                #self.reset(model_state, id_bots=3)
+                self.reset(model_state, id_bots=idx[i])
         
         ## 6.7. Time penalty
         #  constant time penalty for faster completion of episode
@@ -502,7 +506,7 @@ class Env:
         #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(4/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
         
         test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)
@@ -513,7 +517,7 @@ class Env:
         #print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
         #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
 
-        print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
+        print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(4/time_step), distance_rewards[1]*(4/time_step)))
         #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
         #print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
         #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))

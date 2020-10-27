@@ -190,7 +190,7 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
+                self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)

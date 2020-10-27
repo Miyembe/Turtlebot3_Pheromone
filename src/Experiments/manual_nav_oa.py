@@ -111,11 +111,6 @@ class WaypointNavigation:
             print("Arrived goal!")
             msg = Twist()
             self.reset()
-
-        distance_to_obs = sqrt((pos.x-self.obstacle[0])**2+(pos.y-self.obstacle[1])**2)
-        if distance_to_obs <= 0.3:
-            print("Collision!")
-            self.reset()
         # if (distance <= self.distThr and index < len(goal)-1):
         #     self.index += 1 
         #     print("Goal has been changed: ({}, {})".format(goal[self.index][0], goal[self.index][1]))
@@ -142,8 +137,8 @@ class WaypointNavigation:
         '''
         # Constants:
         BIAS = 0.25
-        V_COEF = 0.2
-        W_COEF = 0.3
+        V_COEF = 1.0
+        W_COEF = 0.4
         
         # Initialise values
         avg_phero = np.average(np.asarray(phero)) # values are assigned from the top left (135 deg) to the bottom right (-45 deg) ((0,1,2),(3,4,5),(6,7,8))
@@ -194,7 +189,7 @@ class WaypointNavigation:
         state_target_msg.pose.orientation.z = 0
         state_target_msg.pose.orientation.w = 0
 
-        rospy.wait_for_service('/gazebo/reset_simulation')
+        rospy.wait_for_service('gazebo/reset_simulation')
 
         rospy.wait_for_service('/gazebo/set_model_state')
         try: 

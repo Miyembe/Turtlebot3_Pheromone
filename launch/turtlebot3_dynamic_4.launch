@@ -6,22 +6,22 @@
   <arg name="third_tb3" default="tb3_2"/>
   <arg name="fourth_tb3" default="tb3_3"/>
 
-  <arg name="x_pos1" default="0.0"/>
+  <arg name="x_pos1" default="-2.5"/>
   <arg name="y_pos1" default="0.0"/>
   <arg name="z_pos1" default="0.0"/>
   <arg name="yaw_1"  default="0.0"/>
 
-  <arg name="x_pos2" default="5.0"/>
+  <arg name="x_pos2" default="2.5"/>
   <arg name="y_pos2" default="0.0"/>
   <arg name="z_pos2" default="0.0"/>
   <arg name="yaw_2"  default="3.14"/>
 
-  <arg name="x_pos3" default="2.5"/>
+  <arg name="x_pos3" default="0.0"/>
   <arg name="y_pos3" default="-2.5"/>
   <arg name="z_pos3" default="0.0"/>
   <arg name="yaw_3"  default="1.57"/>
 
-  <arg name="x_pos4" default="2.5"/>
+  <arg name="x_pos4" default="0.0"/>
   <arg name="y_pos4" default="2.5"/>
   <arg name="z_pos4" default="0.0"/>
   <arg name="yaw_4"  default="-1.57"/>
