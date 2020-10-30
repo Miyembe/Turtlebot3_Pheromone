@@ -1,0 +1,23 @@
+Scripts used for experiments
+
+Experiment 1 - Static obstacle avoidance with manual controller
+- env: turtlebot3_simple_collision3.launch
+- phero: pheromone.py / simple_collision_diffused3
+- script: manual_nav_oa_4.py
+
+Experiment 2 - dynamic obstacle avoidance with manual controller
+- env: turtlebot3_dynamic_multi.launch
+- phero: pheromone_multi.py
+- script: manual_nav_oa_multi.py
+
+Experiment 3 - Static obstacle avoidance with RL controller
+- env: turtlebot3_simple_collision3.launch
+- phero: pheromone.py / simple_collision_diffused3
+- script: phero_network_turtlebot3_ppo.py (phero_turtlebot_turtlebot3_repellent_ppo.py)
+
+Experiment 4 - Dynamic obstacle avoidance with RL controller
+- env: turtlebot3_dynamic_multi.launch
+- phero: pheromone_multi.py
+- script: phero_network_turtlebot3_ppo_multi.py (phero_turtlebot_turtlebot3_repellent_ppo_multi.py)
+
+

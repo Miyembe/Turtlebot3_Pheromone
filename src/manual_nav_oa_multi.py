@@ -13,6 +13,7 @@ from geometry_msgs.msg import Twist
 from gazebo_msgs.srv import SetModelState
 from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
 from turtlebot3_waypoint_navigation.msg import fma
+from tf.transformations import quaternion_from_euler
 from math import *
 from time import sleep
 
@@ -25,7 +26,7 @@ class WaypointNavigation:
 
     # Tunable parameters
     wGain = 10
-    vConst = 0.2 #0.2
+    vConst = 0.5 #0.2
     distThr = 0.2
     pheroThr = 1
 
@@ -41,22 +42,37 @@ class WaypointNavigation:
         self.move_cmd = [Twist()]*self.num_robots
 
         # Initialise positions
-        self.positions = [[0,0], [4,0]]
-        self.goal = [[4,0], [0,0]]
+        self.positions = [[-2.5,0], [2.5,0]]
+        #self.goal = [[2.5,0.0], [0,0]]
         self.obstacle = [2,0]
+        self.dones = [False]*2
+
+        # Set initial positions
+        self.target = [[2.5, 0.0], [-2.5, 0.0]] # Two goal
+        self.d_robots = 5.0
+        self.target_index = 0
+        self.num_experiments = 20
+        self.x = [0.0]*self.num_robots
+        self.y = [0.0]*self.num_robots
+        self.theta = [0.0]*self.num_robots
+
+        # File name
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
+        self.file_name = "manual_{}_{}".format(self.num_robots, self.time_str)
+        print(self.file_name)
 
         # Initialise parameters
         
         self.step_size = 0.1
-        self.b_range = np.arange(0, 1+self.step_size, self.step_size)
-        self.v_range = np.arange(0.1, 1+self.step_size, self.step_size)
-        self.w_range = np.arange(0.1, 1+self.step_size, self.step_size)
+        #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
+        self.v_range = np.arange(0.5, 1+self.step_size, self.step_size)
+        self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
 
-        self.BIAS = self.b_range[0]
+        self.BIAS = 0.15
         self.V_COEF = self.v_range[0]
         self.W_COEF = self.w_range[0]
 
-        self.b_size = self.b_range.size        
+        #self.b_size = self.b_range.size        
         self.v_size = self.v_range.size
         self.w_size = self.w_range.size
         
@@ -67,7 +83,7 @@ class WaypointNavigation:
         # Initialise ros related topics
         self.pub_tb3_0 = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=1)
         self.pub_tb3_1 = rospy.Publisher('/tb3_1/cmd_vel', Twist, queue_size=1)
-        self.sub = rospy.Subscriber('/gazebo/model_states', ModelStates, self.Callback, (self.pub_tb3_0, self.pub_tb3_1, self.move_cmd, self.goal))
+        self.sub = rospy.Subscriber('/gazebo/model_states', ModelStates, self.Callback, (self.pub_tb3_0, self.pub_tb3_1, self.move_cmd, self.target))
         self.sub_phero = rospy.Subscriber('/phero_value', fma, self.ReadPhero)
 
         # Initialise simulation
@@ -79,6 +95,7 @@ class WaypointNavigation:
         self.is_reset = False
         self.is_collided = False
         self.is_goal = False
+        self.is_timeout = False
 
         self.reset_timer = time.time()
 
@@ -98,9 +115,9 @@ class WaypointNavigation:
 
     def Callback(self, message, cargs):
 
-        
+
         pub1, pub2, msg, goal = cargs
-        goal = self.goal
+        goal = self.target
 
         for i in range(len(message.name)):
             if message.name[i] == 'tb3_0':
@@ -135,7 +152,6 @@ class WaypointNavigation:
         if (distance_btw_robots <= 0.3 and reset_time > 1):
             self.is_collided = True
             self.reset()
-            
 
         for i in range(self.num_robots):            
             if (self.phero_sum[i] > self.pheroThr):
@@ -152,12 +168,22 @@ class WaypointNavigation:
                 w[i] = min(1.0, max(-1.0, self.wGain*bound))
                 msg[i].linear.x = v[i]
                 msg[i].angular.z = w[i]
+
                 if self.is_reset == True:
                     self.is_reset = False
             elif (distances[i] <= self.distThr and reset_time > 1):
-                self.is_goal = True
+                self.dones[i] = True
                 msg[i] = Twist()
-                self.reset()
+        
+        if reset_time > 60.0:
+            print("Times up!")
+            self.is_timeout = True
+            self.reset()
+        
+        if all(done == True for done in self.dones) == True:
+            self.is_goal = True
+            self.dones = [False]*2
+            self.reset()
                 
         # if (distance <= self.distThr and index < len(goal)-1):
         #     self.index += 1 
@@ -216,7 +242,7 @@ class WaypointNavigation:
         vel_vecs = np.multiply(unit_vecs, vec_coefs)
         vel_vec = np.sum(vel_vecs, axis=0)
         theta = atan2(vel_vec[1], vel_vec[0]) 
-        ang_vel = W_COEF*(1/3)*theta
+        ang_vel = W_COEF*theta
 
         # Velocity assignment
         twist.linear.x = 0.5*(BIAS + V_COEF*avg_phero)
@@ -230,41 +256,74 @@ class WaypointNavigation:
         if self.is_collided == True:
             print("Collision!")
             self.counter_collision += 1
+            self.counter_step += 1
 
         # Increment Arrival Counter and store the arrival time
         if self.is_goal == True:
             print("Arrived goal!")
             self.counter_success += 1
+            self.counter_step += 1
             arrived_timer = time.time()
             art = arrived_timer-self.reset_timer
             self.arrival_time.append(art)
             print("Episode time: %0.2f"%art)
 
+        if self.is_timeout == True:
+            self.counter_collision += 1
+            self.counter_step += 1
+            print("Timeout!")
+
         # Reset the flags
         self.is_collided = False
         self.is_goal = False
+        self.is_timeout = False
+
+        # Reset position assignment
+
+        if self.target_index < self.num_experiments-1:
+            self.target_index += 1
+        else:
+            self.target_index = 0
+            
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.x[0] = (self.d_robots/2)*cos(angle_target)
+        self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
+
+        self.theta[0] = angle_target + pi
+        self.theta[1] = angle_target 
+
+        quat1 = quaternion_from_euler(0,0,self.theta[0])
+        quat2 = quaternion_from_euler(0,0,self.theta[1])
+        
+        
 
         # Reset tb3_0 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = self.positions[0][0]
-        state_msg.pose.position.y = self.positions[0][1] 
+        state_msg.pose.position.x = self.x[0]
+        state_msg.pose.position.y = self.y[0] 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat1[0]
+        state_msg.pose.orientation.y = quat1[1]
+        state_msg.pose.orientation.z = quat1[2]
+        state_msg.pose.orientation.w = quat1[3]
 
         # Reset tb3_1 position
         state_target_msg = ModelState()    
         state_target_msg.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_target_msg.pose.position.x = self.positions[1][0]
-        state_target_msg.pose.position.y = self.positions[1][1]
+        state_target_msg.pose.position.x = self.x[1]
+        state_target_msg.pose.position.y = self.y[1]
         state_target_msg.pose.position.z = 0.0
-        state_target_msg.pose.orientation.x = 0
-        state_target_msg.pose.orientation.y = 0
-        state_target_msg.pose.orientation.z = -0.2
-        state_target_msg.pose.orientation.w = 0
+        state_target_msg.pose.orientation.x = quat2[0]
+        state_target_msg.pose.orientation.y = quat2[1]
+        state_target_msg.pose.orientation.z = quat2[2]
+        state_target_msg.pose.orientation.w = quat2[3]
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -294,12 +353,18 @@ class WaypointNavigation:
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
 
-        # Calculate the step counter
-        self.counter_step = self.counter_success + self.counter_collision
+        if self.counter_step == 0:
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['Episode', 'Bias', 'Vcoef', 'Wcoef', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+
         if self.counter_step != 0:
-            succ_percentage = 100*self.counter_success/self.counter_step
+            if (self.counter_collision != 0 and self.counter_success != 0):
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
+            else:
+                succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
-        
+
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
             print("BIAS: {}, V_COEF: {}, W_COEF: {}".format(self.BIAS, self.V_COEF, self.W_COEF))
             print("Success Rate: {}%".format(succ_percentage))
@@ -308,21 +373,25 @@ class WaypointNavigation:
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
-            file_name = "manual_{}_{}_{}_{}".format(self.num_robots, self.BIAS, self.V_COEF, self.W_COEF)
-            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(file_name), mode='w') as csv_file:
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.BIAS, '%0.2f'%self.V_COEF, '%0.2f'%self.W_COEF, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             
             self.paramUpdate()
-
-            ''' How to exit the program? '''
+            self.arrival_time = []
+            self.counter_collision = 0
+            self.counter_success = 0
+            self.target_index = 0
+            
+        
+        ''' How to exit the program? '''
             #print("why no exit")
             #sys.exit(1)
             #quit()
 
         self.is_reset = True
         self.reset_timer = time.time()
+        
 
     def paramUpdate(self):
         '''
@@ -337,13 +406,13 @@ class WaypointNavigation:
             self.v_counter += 1
             self.W_COEF = self.w_range[self.w_counter]
             self.V_COEF = self.v_range[self.v_counter]
-        elif (self.b_counter < self.b_size-1):
-            self.w_counter = 0
-            self.v_counter = 0
-            self.b_counter += 1
-            self.W_COEF = self.w_range[self.w_counter]
-            self.V_COEF = self.v_range[self.v_counter]
-            self.BIAS = self.b_range[self.b_counter]
+        # elif (self.b_counter < self.b_size-1):
+        #     self.w_counter = 0
+        #     self.v_counter = 0
+        #     self.b_counter += 1
+        #     self.W_COEF = self.w_range[self.w_counter]
+        #     self.V_COEF = self.v_range[self.v_counter]
+        #     self.BIAS = self.b_range[self.b_counter]
         else:
             print("Finish Iteration of parameters")
             sys.exit()

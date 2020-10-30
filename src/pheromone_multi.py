@@ -181,13 +181,14 @@ class Node():
                 for j in range(3):
                     phero_val[n].append(self.pheromone[1-n].getPhero(x_idx[n]+i-1, y_idx[n]+j-1)) # Read the other's pheromone
             phero_arr[n].data = phero_val[n]
+        #print("phero1: {}".format(phero_arr[0].data))           
         self.pub_phero.publish(phero_arr)
         # Pheromone injection (uncomment it when injection is needed)
         ## Two robots inject pheromone in different grids
         if self.is_phero_inj is True:
             for i in range(len(self.pheromone)):
-                phero[i].injection(x_idx[i], y_idx[i], 1, 13, self.phero_max)
-
+                #phero[i].injection(x_idx[i], y_idx[i], 1, 25, self.phero_max)
+                phero[i].gradInjection(x_idx[i], y_idx[i], 1, 0.3, 1.2, self.phero_max)
 
         # Update pheromone matrix in every 0.1s
         time_cur = time.clock()
@@ -370,6 +371,19 @@ class Pheromone():
                     if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= maxp:
                         self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = maxp
             self.injection_timer = time_cur
+    def gradInjection(self, x, y, value, min_val, rad, maxp):
+
+        time_cur = time.clock()
+        if time_cur-self.injection_timer > 0.1:
+            radius = int(rad*self.resolution)
+            #print("Radius: {}".format(radius))
+            for i in range(-radius, radius):
+                for j in range(-radius, radius):
+                    if sqrt(i**2+j**2) <= radius:
+                        self.grid[x+i, y+j] = value - value*(sqrt(i**2+j**2))/radius + min_val
+                        if self.grid[x+i, y+j] >= maxp:
+                            self.grid[x+i, y+j] = maxp
+            self.injection_timer = time_cur
 
     def circle(self, x, y, value, radius):
         radius = int(radius*self.resolution)
@@ -430,8 +444,8 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone('1', 0.1, 0)
-    Phero2 = Pheromone('2', 0.1, 0)
+    Phero1 = Pheromone('1', 0.5, 0)
+    Phero2 = Pheromone('2', 0.5, 0)
     Phero = [Phero1, Phero2]
     node1 = Node(Phero)
     rospy.spin()

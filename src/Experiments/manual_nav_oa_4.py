@@ -381,7 +381,8 @@ class WaypointNavigation:
             print("Service Failed %s"%e)
 
         
-        # Writing files
+
+        
         
         if self.counter_step == 0:
             with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:

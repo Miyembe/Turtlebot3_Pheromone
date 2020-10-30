@@ -407,6 +407,7 @@ class PPO:
         self.save_interval = save_interval
         self.restore_path = restore_path
         self.deterministic = deterministic
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
     
     def constfn(self, val):
         def f(_):
@@ -438,6 +439,7 @@ class PPO:
         lr = self.lr
         cliprange = self.cliprange
         deterministic = self.deterministic
+        step_reward = [[0.0, 0.0]]
 
         # Define a function to make Actor-Critic Model 
         make_model = lambda : Model(policy=self.policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -561,8 +563,13 @@ class PPO:
                     board_logger.log_scalar(lossname, lossval, update)
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
                 board_logger.flush()
+
+                reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
+                #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
+                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
+                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
-                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
+                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
                     os.makedirs(checkdir)
                 savepath = osp.join(checkdir, '%.5i'%update +"r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])))

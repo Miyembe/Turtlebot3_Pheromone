@@ -1,3 +1,4 @@
+
 #! /usr/bin/env python
 
 import rospy
@@ -6,6 +7,7 @@ import tf
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, Point, Quaternion
+from tf.transformations import quaternion_from_euler
 import math
 from math import *
 
@@ -60,7 +62,7 @@ class Env:
     def __init__(self):
 
         # Settings
-        self.num_robots = 4
+        self.num_robots = 2
 
         # Node initialisation
         self.node = rospy.init_node('phero_turtlebot_env', anonymous=True)
@@ -70,8 +72,6 @@ class Env:
 
         self.pub_tb3_0 = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=1)
         self.pub_tb3_1 = rospy.Publisher('/tb3_1/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_2 = rospy.Publisher('/tb3_2/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_3 = rospy.Publisher('/tb3_3/cmd_vel', Twist, queue_size=1)
         self.position = Point() # Do I need this position in this script? or just get pheromone value only?
         self.move_cmd = Twist()
 
@@ -101,11 +101,17 @@ class Env:
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Previous positions
-        self.x_prev = [0.0, 5.0, 2.5, 2.5]#[0.0, 2.0] # [0.0,4.0]
-        self.y_prev = [0.0, 0.0, -2.5, 2.5] #[0.0, -2.0]  # [0.0,0.0]
+        self.x_prev = [-2.5, 2.5]
+        self.y_prev = [0.0, 0.0]
 
-        # Set target position
-        self.target = [[5.0, 0.0], [0.0, 0.0], [2.5, 2.5], [2.5, -2.5]]#[[4.0, 0.0], [2.0, 2.0]] # Two goal (crossing scenario) # [[4.0,0.0], [0.0,0.0]]
+        # Set initial positions
+        self.target = [[2.5, 0.0], [-2.5, 0.0]] # Two goal
+        self.d_robots = 5
+        self.target_index = 0
+        self.num_experiments = 20
+        self.x = [0.0]*self.num_robots
+        self.y = [0.0]*self.num_robots
+        self.theta = [0.0]*self.num_robots
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
         self.model_index = -1
@@ -124,76 +130,72 @@ class Env:
 
     #def print_odom(self):
 
-    def reset(self, model_state = None, id_bots = 999):
+    def reset(self, model_state = None, id_bots = 3):
         
         self.is_collided = False
-        tb3_0 = -1
-        tb3_1 = -1
-        tb3_2 = -1
-        tb3_3 = -1
+
+        # ID assignment 
+        tb3_0 = 3
+        tb3_1 = 3
         if model_state is not None:
             for i in range(len(model_state.name)):
                 if model_state.name[i] == 'tb3_0':
                     tb3_0 = i
                 if model_state.name[i] == 'tb3_1':
                     tb3_1 = i
-                if model_state.name[i] == 'tb3_2':
-                    tb3_2 = i
-                if model_state.name[i] == 'tb3_3':
-                    tb3_3 = i
-                
         else:
             tb3_0 = -1
             tb3_1 = -2
-            tb3_2 = -3
-            tb3_3 = -4
-        #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
+
+        # Reset position assignment
+        if id_bots == 3: 
+            if self.target_index < self.num_experiments-1:
+                self.target_index += 1
+            else:
+                self.target_index = 0
+                
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.x[0] = (self.d_robots/2)*cos(angle_target)
+        self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        self.theta[0] = angle_target + pi
+        self.theta[1] = angle_target 
+
+        quat1 = quaternion_from_euler(0,0,self.theta[0])
+        quat2 = quaternion_from_euler(0,0,self.theta[1])
+        
+        self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
+        
+        
+
+
+        print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
         # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = 0.0
-        state_msg.pose.position.y = 0.0 
+        state_msg.pose.position.x = self.x[0]
+        state_msg.pose.position.y = self.y[0]
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat1[0]
+        state_msg.pose.orientation.y = quat1[1]
+        state_msg.pose.orientation.z = quat1[2]
+        state_msg.pose.orientation.w = quat1[3]
 
         # Reset Turtlebot 2 Position
-        state_msg2 = ModelState()    
-        state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg2.pose.position.x = 5.0
-        state_msg2.pose.position.y = 0.0
-        state_msg2.pose.position.z = 0.0
-        state_msg2.pose.orientation.x = 0
-        state_msg2.pose.orientation.y = 0
-        state_msg2.pose.orientation.z = -0.2
-        state_msg2.pose.orientation.w = 0
-
-        # Reset Turtlebot 3 Position
-
-        state_msg3 = ModelState()    
-        state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg3.pose.position.x = 2.5
-        state_msg3.pose.position.y = -2.5
-        state_msg3.pose.position.z = 0.0
-        state_msg3.pose.orientation.x = 0
-        state_msg3.pose.orientation.y = 0
-        state_msg3.pose.orientation.z = 0.7071
-        state_msg3.pose.orientation.w = 0.7071
-
-        # Reset Turtlebot 4 Position
-
-        state_msg4 = ModelState()    
-        state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg4.pose.position.x = 2.5
-        state_msg4.pose.position.y = 2.5
-        state_msg4.pose.position.z = 0.0
-        state_msg4.pose.orientation.x = 0
-        state_msg4.pose.orientation.y = 0
-        state_msg4.pose.orientation.z = -0.7071
-        state_msg4.pose.orientation.w = 0.7071
+        state_target_msg = ModelState()    
+        state_target_msg.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        state_target_msg.pose.position.x = self.x[1]
+        state_target_msg.pose.position.y = self.y[1]
+        state_target_msg.pose.position.z = 0.0
+        state_target_msg.pose.orientation.x = quat2[0]
+        state_target_msg.pose.orientation.y = quat2[1]
+        state_target_msg.pose.orientation.z = quat2[2]
+        state_target_msg.pose.orientation.w = quat2[3]
 
         # Reset Pheromone Grid
         #
@@ -204,14 +206,10 @@ class Env:
         rospy.wait_for_service('/gazebo/set_model_state')
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
-            if id_bots == 999 or id_bots == tb3_0:
+            if id_bots == 3 or id_bots == tb3_0:
                 resp = set_state(state_msg)
-            if id_bots == 999 or id_bots == tb3_1:
-                resp2 = set_state(state_msg2)
-            if id_bots == 999 or id_bots == tb3_2:
-                resp3 = set_state(state_msg3)
-            if id_bots == 999 or id_bots == tb3_3:
-                resp4 = set_state(state_msg4)
+            if id_bots == 3 or id_bots == tb3_1:
+                resp_targ = set_state(state_target_msg)
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
@@ -221,14 +219,10 @@ class Env:
 
         self.move_cmd.linear.x = 0.0
         self.move_cmd.angular.z = 0.0
-        if id_bots == 999 or id_bots == tb3_0:
+        if id_bots == 3 or id_bots == tb3_0:
             self.pub_tb3_0.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_1:
+        if id_bots == 3 or id_bots == tb3_1:
             self.pub_tb3_1.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_2:
-            self.pub_tb3_2.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_3:
-            self.pub_tb3_3.publish(self.move_cmd)
         self.rate.sleep()
 
         rospy.wait_for_service('phero_reset')
@@ -267,11 +261,7 @@ class Env:
                 tb3_0 = i
             if model_state.name[i] == 'tb3_1':
                 tb3_1 = i
-            if model_state.name[i] == 'tb3_2':
-                tb3_2 = i
-            if model_state.name[i] == 'tb3_3':
-                tb3_3 = i
-        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1], model_state.pose[tb3_2], model_state.pose[tb3_3]]
+        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1]]
         for i in range(self.num_robots):
             # Write relationship between i and the index
             pose[i] = tb3_pose[i] # Need to find the better way to assign index for each robot
@@ -280,7 +270,7 @@ class Env:
             y[i] = pose[i].position.y
             angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
             theta[i] = angles[i][2]
-        idx = [tb3_0, tb3_1, tb3_2, tb3_3]
+        idx = [tb3_0, tb3_1]
         return x, y, theta, idx
 
     def angle0To360(self, angle):
@@ -339,8 +329,6 @@ class Env:
         while (record_time_step < time_step):
             self.pub_tb3_0.publish(twists_rsc[0])
             self.pub_tb3_1.publish(twists_rsc[1])
-            self.pub_tb3_2.publish(twists_rsc[2])
-            self.pub_tb3_3.publish(twists_rsc[3])
 
             self.rate.sleep()
             record_time = time.time()
@@ -406,7 +394,7 @@ class Env:
             if abs(goal_progress[i]) < 0.1:
                 print("Goal Progress: {}".format(goal_progress))
                 if goal_progress[i] >= 0:
-                        distance_rewards[i] = goal_progress[i]
+                        distance_rewards[i] = goal_progress[i] * 1.2
                 else:
                         distance_rewards[i] = goal_progress[i]
             else:
@@ -417,14 +405,14 @@ class Env:
         self.just_reset == False
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
-        #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
-        phero_rewards = [0.0, 0.0, 0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
+        phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
+        phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 6.3. Goal reward
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.5 and dones[i] == False:
+            if distance_to_goals[i] <= 0.3 and dones[i] == False:
                 goal_rewards[i] = 50.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
@@ -453,7 +441,7 @@ class Env:
         if distance_btw_robots <= 0.3 and dones[i] == False:
             print("Collision!")
             for i in range(self.num_robots):
-                collision_rewards[i] = -40.0
+                collision_rewards[i] = -30.0
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
         
@@ -480,13 +468,13 @@ class Env:
         ## 7.3. when the robot is out of the pheromone grid
         test_time = time.time()
         for i in range(self.num_robots):
-            if abs(x[i]) >= 5.8 or abs(y[i]) >= 5.8:
+            if abs(x[i]) >= 4.7 or abs(y[i]) >= 4.7:
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
         
         ## 7.4. If all the robots are done with tasks, reset
         if all(flag == True for flag in dones) == True:
-            self.reset(model_state, id_bots=999)
+            self.reset(model_state, id_bots=3)
             for i in range(self.num_robots):
                 dones[i] = False
 

@@ -94,6 +94,9 @@ class Env:
         # Set target position
         self.target_x = 4.0
         self.target_y = 0.0
+        self.target_index = 0
+        self.radius = 4
+        self.num_experiments = 20
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -119,19 +122,29 @@ class Env:
         
         self.is_collided = False
 
-        index_list = [-1, 0, 1]
-        index_x = random.choice(index_list)
+        # index_list = [-1, 0, 1]
+        # index_x = random.choice(index_list)
 
-        if index_x==0:
-            index_list1 = [-1, 1]
-            index_y = random.choice(index_list1)
+        # if index_x==0:
+        #     index_list1 = [-1, 1]
+        #     index_y = random.choice(index_list1)
+        # else:
+        #     index_list1 = [-1, 0, 1]
+        #     index_y = random.choice(index_list1)
+
+
+        # self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
+        # self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
+
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.target_x = self.radius*cos(angle_target)
+        self.target_y = self.radius*sin(angle_target)
+        
+        if self.target_index < self.num_experiments-1:
+            self.target_index += 1
         else:
-            index_list1 = [-1, 0, 1]
-            index_y = random.choice(index_list1)
-
-
-        self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
-        self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
+            self.target_index = 0
 
         # Reset Turtlebot position
         state_msg = ModelState()
@@ -204,10 +217,10 @@ class Env:
         record_time_step = 0
 
         # rescaling the action
-        linear_x = linear_x*0.26
+        linear_x = linear_x*0.4
         linear_x = min(1, max(-1, linear_x))
         linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
-        angular_z_rsc = angular_z
+        angular_z_rsc = min(1, max(-1, angular_z*0.6))
 
         self.move_cmd.linear.x = linear_x_rsc
         self.move_cmd.angular.z = angular_z_rsc
@@ -275,48 +288,48 @@ class Env:
         if goal_progress >= 0:
             distance_reward = goal_progress
         else:
-            distance_reward = goal_progress * 2
+            distance_reward = goal_progress
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
-        phero_sum = np.sum(phero_vals)
-        phero_reward = (-phero_sum) # max phero_r: 0, min phero_r: -9
+        #phero_sum = np.sum(phero_vals)
+        phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
         #print("------------------------")
         #print("State: {}".format(phero_vals))
         ## 6.3. Goal reward
-        if distance_to_goal <= 0.4:
-            goal_reward = 100.0
+        if distance_to_goal <= 0.3:
+            goal_reward = 50.0
             done = True
             self.reset()
             time.sleep(1)
 
         ## 6.4. Angular speed penalty
         angular_punish_reward = 0.0
-        if angular_z_rsc > 0.8 or angular_z_rsc < -0.8:
+        if abs(angular_z_rsc) > 0.8:
             angular_punish_reward = -1
         
         ## 6.5. Linear speed penalty
         linear_punish_reward = 0.0
         if linear_x_rsc < 0.2:
-            linear_punish_reward = -2
+            linear_punish_reward = -1
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
-        #
+        collision_reward = 0.0
+        obs_pos = [[2, 0],[-2,0],[0,2],[0,-2]]
+        dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
+        for i in range(len(obs_pos)):
+            if dist_obs[i] < 0.3:
+                collision_reward = -50
+                self.reset()
+                time.sleep(0.5)
 
         # 7. Reset
         ## 7.1. when robot goes too far from the target
         if distance_to_goal >= self.dis_rwd_norm:
             self.reset()
             time.sleep(0.5) 
-        
-        ## 7.2. when it collides to the obstacle
-        obs_pos = [[2, 0],[-2,0],[0,2],[0,-2],[1.414,1.414],[1.414,-1.414],[-1.414,-1.414],[-1.414, 1.414]]
-        dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
-        for i in range(len(obs_pos)):
-            if dist_obs[i] < 0.15:
-                self.reset()
-                time.sleep(0.5)
-        ## 7.3. when the robot is out of the pheromone grid
-        if abs(x) >= 5 or abs(y) >= 5:
+
+        ## 7.2. when the robot is out of the pheromone grid
+        if abs(x) >= 4.7 or abs(y) >= 4.7:
             self.reset()
             time.sleep(0.5)
 
@@ -325,17 +338,19 @@ class Env:
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
 
-        reward = distance_reward*(8/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward
+        reward = distance_reward*(4/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward + collision_reward
         reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
         print("Ep: {}".format(self.ep_len_counter))
-        print("Distance R: {}".format(distance_reward*(5/time_step)))
-        print("Phero R: {}, Phero V: {}".format(phero_reward, phero_sum))
-        #print("Goal R: {}".format(goal_reward))
-        #print("Angular R: {}".format(angular_punish_reward))
-        #print("Linear R: {}".format(linear_punish_reward))
+        print("Target: ({}, {})".format(self.target_x, self.target_y))
+        print("Distance R: {}".format(distance_reward*(4/time_step)))
+        print("Phero R: {}".format(phero_reward))
+        print("Goal R: {}".format(goal_reward))
+        print("Angular R: {}".format(angular_punish_reward))
+        print("Linear R: {}".format(linear_punish_reward))
+        print("Collision R: {}".format(collision_reward))
         print("Reward: {}".format(reward))
         #print("**********************")
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
