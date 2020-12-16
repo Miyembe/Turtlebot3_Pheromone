@@ -65,12 +65,12 @@ class WaypointNavigation:
         
         self.step_size = 0.1
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
-        self.v_range = np.arange(0.5, 1+self.step_size, self.step_size)
+        self.v_range = np.arange(0.2, 0.6, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
 
-        self.BIAS = 0.15
-        self.V_COEF = self.v_range[0]
-        self.W_COEF = self.w_range[0]
+        self.BIAS = 0.3
+        self.V_COEF = 1.0#self.v_range[0]
+        self.W_COEF = 1.0#self.w_range[0]
 
         #self.b_size = self.b_range.size        
         self.v_size = self.v_range.size
@@ -114,8 +114,14 @@ class WaypointNavigation:
         self.phero_sum = [np.sum(np.asarray(phero)) for phero in phero_data]
 
     def Callback(self, message, cargs):
-
-
+        '''
+        Main Function
+        - Receive position data
+        - Generate action
+        '''
+        # ========================================================================= #
+	    #                           Initialisation                                  #
+	    # ========================================================================= #
         pub1, pub2, msg, goal = cargs
         goal = self.target
 
@@ -133,22 +139,24 @@ class WaypointNavigation:
         angles = [tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w)) for ori in oris]
 
         thetas = [angle[2] for angle in angles]
-        #theta = pos.theta
-        #how to make gazebo grid map
+
         # P controller
         v = [0, 0]
         w = [0, 0]
         
         distances = [None]*self.num_robots
         for i in range(self.num_robots):
-            #print("poss {}, poss[i].x {}, goal[i] {}".format(poss, poss[0].x, goal[i]))
             distances[i] = sqrt((poss[i].x-goal[i][0])**2+(poss[i].y-goal[i][1])**2)
 
         distance_btw_robots = sqrt((poss[0].x-poss[1].x)**2+(poss[0].y-poss[1].y)**2)
-        #print(distance_btw_robots)
         step_timer = time.time()
         reset_time = step_timer - self.reset_timer
-        #print("reset_time: {}".format(reset_time))
+
+
+        # ========================================================================= #
+	    #                          Action & State assignment                        #
+	    # ========================================================================= #
+
         if (distance_btw_robots <= 0.3 and reset_time > 1):
             self.is_collided = True
             self.reset()
@@ -184,21 +192,13 @@ class WaypointNavigation:
             self.is_goal = True
             self.dones = [False]*2
             self.reset()
-                
-        # if (distance <= self.distThr and index < len(goal)-1):
-        #     self.index += 1 
-        #     print("Goal has been changed: ({}, {})".format(goal[self.index][0], goal[self.index][1]))
 
         # Publish velocity 
         pub1.publish(msg[0])
         pub2.publish(msg[1])
 
         self.is_reset = False
-
-        # Reporting
-        #print('Callback: x=%2.2f, y=%2.2f, dist=%4.2f, cmd.v=%2.2f, cmd.w=%2.2f' %(pos.x,pos.y,distance,v,w))
     
-    # Angular velocity coefficient (When avg phero is high, it is more sensitive)
     def velCoef(self, value1, value2):
         '''
         - val_avg (0, 1)
@@ -218,9 +218,6 @@ class WaypointNavigation:
         Pheromone-based obstacle avoidance algorithm
         - Input: 9 cells of pheromone
         - Output: Twist() to avoid obstacle
-        - 20201023 - Can I set the v and w range? v(0, 1), w(-1, 1)
-        - v = BIAS (0, 1) + V_COEF (0, 1) * avg_phero(0, 1) // (0, 2)
-        - w = W_COEF (0, 1) * (1/3) * theta (-pi, pi) // (-1, 1) 
         '''
         # Constants:
         BIAS = self.BIAS #0.1 -successful set
@@ -251,7 +248,17 @@ class WaypointNavigation:
         return twist
     
     def reset(self):
-        
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Assign next positions and reset
+        3. Log the result in every selected time-step
+        '''
+
+
+        # ========================================================================= #
+	    #                           COUNTER UPDATE                                  #
+	    # ========================================================================= #
         # Increment Collision Counter
         if self.is_collided == True:
             print("Collision!")
@@ -278,7 +285,9 @@ class WaypointNavigation:
         self.is_goal = False
         self.is_timeout = False
 
-        # Reset position assignment
+        # ========================================================================= #
+	    #                                  RESET                                    #
+	    # ========================================================================= #
 
         if self.target_index < self.num_experiments-1:
             self.target_index += 1
@@ -341,8 +350,6 @@ class WaypointNavigation:
             self.move_cmd[i].angular.z = 0.0
         self.pub_tb3_0.publish(self.move_cmd[0])
         self.pub_tb3_1.publish(self.move_cmd[1])
-        # time.sleep(1)
-        # self.pub.publish(self.move_cmd)
 
         # Request service to reset the pheromone grid
         rospy.wait_for_service('phero_reset')
@@ -353,6 +360,10 @@ class WaypointNavigation:
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
 
+
+        # ========================================================================= #
+	    #                                  LOGGING                                  #
+	    # ========================================================================= #
         if self.counter_step == 0:
             with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -395,7 +406,7 @@ class WaypointNavigation:
 
     def paramUpdate(self):
         '''
-        - (0,0,0) -> (4,4,4)
+        Parameter update after the number of experiments for a parameter set finished
         '''
         print("Parameters are updated!")
         if (self.w_counter < self.w_size-1):
@@ -406,13 +417,6 @@ class WaypointNavigation:
             self.v_counter += 1
             self.W_COEF = self.w_range[self.w_counter]
             self.V_COEF = self.v_range[self.v_counter]
-        # elif (self.b_counter < self.b_size-1):
-        #     self.w_counter = 0
-        #     self.v_counter = 0
-        #     self.b_counter += 1
-        #     self.W_COEF = self.w_range[self.w_counter]
-        #     self.V_COEF = self.v_range[self.v_counter]
-        #     self.BIAS = self.b_range[self.b_counter]
         else:
             print("Finish Iteration of parameters")
             sys.exit()

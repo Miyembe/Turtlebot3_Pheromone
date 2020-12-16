@@ -392,6 +392,7 @@ class Env:
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
 
         # 5. State reshape
+        print("state_arr: {}".format(state_arr.shape))
         states = state_arr.reshape(self.num_robots, self.state_num)
 
         
@@ -453,21 +454,17 @@ class Env:
         ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         #   it needs to be rewritten to really detect collision
-
         distance_btw_robots = np.ones([self.num_robots, self.num_robots])
         for i in range(self.num_robots):
             for j in range(self.num_robots):
                 if j != i:
-                    distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2) # Python 
-
-
+                    distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2)
         
 
         collision_rewards = [0.0]*self.num_robots
-        print("distance_btw_robots: {}".format(distance_btw_robots))
         for i in range(self.num_robots):
-            if any([dis <= 0.32 for dis in distance_btw_robots[i]]) == True:
-                print("Collision! Robot: {}".format(i))
+            if any(dis <= 0.3 for dis in distance_btw_robots[i]) == True and dones[i] == False:
+                print("Collision!")
                 collision_rewards[i] = -50.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
@@ -495,15 +492,15 @@ class Env:
         ## 7.3. when the robot is out of the pheromone grid
         test_time = time.time()
         for i in range(self.num_robots):
-            if abs(x[i]) >= 5.5 or abs(y[i]) >= 5.5:
+            if abs(x[i]) >= 5.8 or abs(y[i]) >= 5.8:
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
         
         ## 7.4. If all the robots are done with tasks, reset
-        # if all(flag == True for flag in dones) == True:
-        #     self.reset(model_state, id_bots=999)
-        #     for i in range(self.num_robots):
-        #         dones[i] = False
+        if all(flag == True for flag in dones) == True:
+            self.reset(model_state, id_bots=999)
+            for i in range(self.num_robots):
+                dones[i] = False
 
         self.dones = dones
         #print("distance reward: {}".format(distance_reward*(3/time_step)))

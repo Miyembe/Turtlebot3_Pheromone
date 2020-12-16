@@ -368,6 +368,7 @@ class Runner(AbstractEnvRunner):
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
+        # Calculation of GAE
         for i in range(self.env.num_robots):
             lastgaelam = 0
             for t in reversed(range(self.nsteps)):

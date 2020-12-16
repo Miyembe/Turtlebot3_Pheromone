@@ -69,6 +69,9 @@ class Node():
         
 
     def posToIndex(self, x, y):
+        '''
+        Convert 2D coordinates (x, y) into the matrix index (x_index, y_index) 
+        '''
         phero = self.pheromone
         # Read pheromone value at the robot position
         res = self.pheromone.resolution
@@ -86,6 +89,9 @@ class Node():
         return x_index, y_index
 
     def indexToPos(self, x_index, y_index):
+        '''
+        Convert matrix indices into 2D coordinate (x, y)
+        '''
         
         x = x_index - (self.pheromone.num_cell-1)/2
         y = y_index - (self.pheromone.num_cell-1)/2
@@ -110,6 +116,11 @@ class Node():
         if angles[2] < 0:
             self.theta = angles[2] + 2*pi
         else: self.theta = angles[2]
+
+        # ========================================================================= #
+	    #                           Pheromone Reading                               #
+	    # ========================================================================= #
+
 
         '''
         Pheromone Value Reading
@@ -143,25 +154,28 @@ class Node():
         # # Assign pheromone value and publish it
         # phero_val = phero.getPhero(x_index, y_index)
         # self.pub_phero.publish(phero_val)
+
+        # ========================================================================= #
+	    #                           Pheromone Injection                             #
+	    # ========================================================================= #
         
-        # Pheromone injection (uncomment it when injection is needed)
+        ''' Pheromone injection (uncomment it when injection is needed) '''
         # if self.is_phero_inj is True:
         #     phero.injection(x_index, y_index, 0.2, 5, self.phero_max)
 
-
-        # Update pheromone matrix in every 0.1s
+        # ========================================================================= #
+	    #                           Pheromone Update                                #
+	    # ========================================================================= #
+        
+        ''' Pheromone Update '''
         # time_cur = time.clock()
         # if time_cur-phero.step_timer >= 0.1: 
         #     phero.update(self.phero_min, self.phero_max)
         #     phero.step_timer = time_cur
 
-        #log_time_cur = time.clock()
-        # Logging Pheromone grid
-        # if log_time_cur - self.log_timer >= 2:
-        #     self.log_file = open("phero_value.txt", "a+")
-        #     np.savetxt(self.log_file, self.pheromone.grid, delimiter=',')
-        #     self.log_file.close()
-
+        # ========================================================================= #
+	    #                           Save Pheromone                                  #
+	    # ========================================================================= #
         
         '''Saving pheromone'''
         # # Save after 20s
@@ -176,6 +190,11 @@ class Node():
         #     self.pheromone.save("foraging_static")
         #     self.is_saved = True
         #     self.is_phero_inj = False
+
+        # ========================================================================= #
+	    #                           Load Pheromone                                  #
+	    # ========================================================================= #
+        
         '''Loading Pheromone'''
         # Load the pheromone
         # 1. When use continuous contoller. (1) It hasn't previously loaded, (2) pheromone injection is disabled, 
@@ -265,6 +284,21 @@ class Node():
 
 class Pheromone():
 
+    # ========================================================================= #
+	#                           Pheromone Class                                 #
+	# ========================================================================= #
+    '''
+    Pheromone Class
+    1. Initialise Pheromone
+    2. Get Pheromone
+    3. Set Pheromone
+    4. Inject Pheromone at the specified position
+    5. Circle 
+    6. Update Pheromone (Evaporation & Diffusion)
+    7. Save Pheormone Grid
+    8. Load Pheromone Grid
+    '''
+
     def __init__(self, evaporation, diffusion):
         self.resolution = 10 # grid cell size = 1 m / resolution
         self.size = 10 # m
@@ -336,9 +370,6 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        # dir_name = os.path.dirname('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))
-        # if not os.path.exists(dir_name):
-        #     os.makedirs(dir_name)
         with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
@@ -346,7 +377,6 @@ class Pheromone():
     def load(self, file_name):
         with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
-        #os.remove('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name))
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
     

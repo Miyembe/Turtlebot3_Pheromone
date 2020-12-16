@@ -1,3 +1,4 @@
+
 #! /usr/bin/env python
 
 import rospy
@@ -6,6 +7,7 @@ import tf
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, Point, Quaternion
+from tf.transformations import quaternion_from_euler
 import math
 from math import *
 
@@ -29,6 +31,7 @@ import keras.backend as K
 import gym
 import numpy as np
 import random
+import csv
 
 import scipy.io as sio
 
@@ -60,7 +63,7 @@ class Env:
     def __init__(self):
 
         # Settings
-        self.num_robots = 4
+        self.num_robots = 2
 
         # Node initialisation
         self.node = rospy.init_node('phero_turtlebot_env', anonymous=True)
@@ -70,8 +73,6 @@ class Env:
 
         self.pub_tb3_0 = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=1)
         self.pub_tb3_1 = rospy.Publisher('/tb3_1/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_2 = rospy.Publisher('/tb3_2/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_3 = rospy.Publisher('/tb3_3/cmd_vel', Twist, queue_size=1)
         self.position = Point() # Do I need this position in this script? or just get pheromone value only?
         self.move_cmd = Twist()
 
@@ -101,11 +102,17 @@ class Env:
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Previous positions
-        self.x_prev = [-2.5, 2.5, 0.0, 0.0]#[0.0, 2.0] # [0.0,4.0]
-        self.y_prev = [0.0, 0.0, -2.5, 2.5] #[0.0, -2.0]  # [0.0,0.0]
+        self.x_prev = [-2.5, 2.5]
+        self.y_prev = [0.0, 0.0]
 
-        # Set target position
-        self.target = [[2.5, 0.0], [-2.5, 0.0], [0.0, 2.5], [0.0, -2.5]]#[[4.0, 0.0], [2.0, 2.0]] # Two goal (crossing scenario) # [[4.0,0.0], [0.0,0.0]]
+        # Set initial positions
+        self.target = [[2.5, 0.0], [-2.5, 0.0]] # Two goal
+        self.d_robots = 5
+        self.target_index = 0
+        self.num_experiments = 20
+        self.x = [0.0]*self.num_robots
+        self.y = [0.0]*self.num_robots
+        self.theta = [0.0]*self.num_robots
 
         # Set turtlebot index in Gazebo (to distingush from other models in the world)
         self.model_index = -1
@@ -118,82 +125,130 @@ class Env:
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
 
+        # File name
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
+        self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
+        print(self.file_name)
+
+        # Experiments
+        self.isExpDone = False
+   
+        self.counter_step = 0
+        self.counter_collision = 0
+        self.counter_success = 0
+        self.counter_timeout = 0
+        self.arrival_time = []
+        
+        self.is_reset = False
+        self.is_collided = False
+        self.is_goal = 0
+        self.is_timeout = False
+
+        self.reset_timer = time.time()
+
     #To be done when real robots are used
     
     #def get_odom(self):
 
     #def print_odom(self):
 
-    def reset(self, model_state = None, id_bots = 999):
+    def reset(self, model_state = None, id_bots = 3):
         
-        self.is_collided = False
-        tb3_0 = -1
-        tb3_1 = -1
-        tb3_2 = -1
-        tb3_3 = -1
+        #self.is_collided = False
+        print("goal value: {}".format(self.is_goal))
+        print("done?: {}".format(self.dones))
+
+        # ID assignment 
+        tb3_0 = 3
+        tb3_1 = 3
         if model_state is not None:
             for i in range(len(model_state.name)):
                 if model_state.name[i] == 'tb3_0':
                     tb3_0 = i
                 if model_state.name[i] == 'tb3_1':
                     tb3_1 = i
-                if model_state.name[i] == 'tb3_2':
-                    tb3_2 = i
-                if model_state.name[i] == 'tb3_3':
-                    tb3_3 = i
-                
         else:
             tb3_0 = -1
             tb3_1 = -2
-            tb3_2 = -3
-            tb3_3 = -4
+
+        # Increment Collision Counter
+        if self.is_collided == True:
+            print("Collision!")
+            self.counter_collision += 1
+            self.counter_step += 1
+
+        # Increment Arrival Counter and store the arrival time
+        if self.is_goal == 2:
+            print("Arrived goal!")
+            self.counter_success += 1
+            self.counter_step += 1
+            arrived_timer = time.time()
+            art = arrived_timer-self.reset_timer
+            self.arrival_time.append(art)
+            print("Episode time: %0.2f"%art)
+
+        if self.is_timeout == True:
+            #self.counter_collision += 1
+            #self.counter_step += 1
+            self.counter_step += 1
+            self.counter_timeout += 1
+            print("Timeout!")
+
+        # Reset the flags
+        self.is_collided = False
+        self.is_goal = 0
+        self.is_timeout = False
+
+        # Reset position assignment
+        if id_bots == 3: 
+            if self.target_index < self.num_experiments-1:
+                self.target_index += 1
+            else:
+                self.target_index = 0
+                
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.x[0] = (self.d_robots/2)*cos(angle_target)
+        self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        self.theta[0] = angle_target + pi
+        self.theta[1] = angle_target 
+
+        quat1 = quaternion_from_euler(0,0,self.theta[0])
+        quat2 = quaternion_from_euler(0,0,self.theta[1])
+        
+        self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
+        
+        
+        
+
+
         #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
         # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = -2.5
-        state_msg.pose.position.y = 0.0 
+        state_msg.pose.position.x = self.x[0]
+        state_msg.pose.position.y = self.y[0]
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat1[0]
+        state_msg.pose.orientation.y = quat1[1]
+        state_msg.pose.orientation.z = quat1[2]
+        state_msg.pose.orientation.w = quat1[3]
 
         # Reset Turtlebot 2 Position
-        state_msg2 = ModelState()    
-        state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg2.pose.position.x = 2.5
-        state_msg2.pose.position.y = 0.0
-        state_msg2.pose.position.z = 0.0
-        state_msg2.pose.orientation.x = 0
-        state_msg2.pose.orientation.y = 0
-        state_msg2.pose.orientation.z = -0.2
-        state_msg2.pose.orientation.w = 0
-
-        # Reset Turtlebot 3 Position
-
-        state_msg3 = ModelState()    
-        state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg3.pose.position.x = 0.0
-        state_msg3.pose.position.y = -2.5
-        state_msg3.pose.position.z = 0.0
-        state_msg3.pose.orientation.x = 0
-        state_msg3.pose.orientation.y = 0
-        state_msg3.pose.orientation.z = 0.7071
-        state_msg3.pose.orientation.w = 0.7071
-
-        # Reset Turtlebot 4 Position
-
-        state_msg4 = ModelState()    
-        state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg4.pose.position.x = 0.0
-        state_msg4.pose.position.y = 2.5
-        state_msg4.pose.position.z = 0.0
-        state_msg4.pose.orientation.x = 0
-        state_msg4.pose.orientation.y = 0
-        state_msg4.pose.orientation.z = -0.7071
-        state_msg4.pose.orientation.w = 0.7071
+        state_target_msg = ModelState()    
+        state_target_msg.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        state_target_msg.pose.position.x = self.x[1]
+        state_target_msg.pose.position.y = self.y[1]
+        state_target_msg.pose.position.z = 0.0
+        state_target_msg.pose.orientation.x = quat2[0]
+        state_target_msg.pose.orientation.y = quat2[1]
+        state_target_msg.pose.orientation.z = quat2[2]
+        state_target_msg.pose.orientation.w = quat2[3]
 
         # Reset Pheromone Grid
         #
@@ -204,18 +259,9 @@ class Env:
         rospy.wait_for_service('/gazebo/set_model_state')
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
-            if id_bots == 999 or id_bots == tb3_0:
+            if id_bots == 3:
                 resp = set_state(state_msg)
-                self.dones[0] = False
-            if id_bots == 999 or id_bots == tb3_1:
-                resp2 = set_state(state_msg2)
-                self.dones[1] = False
-            if id_bots == 999 or id_bots == tb3_2:
-                resp3 = set_state(state_msg3)
-                self.dones[2] = False
-            if id_bots == 999 or id_bots == tb3_3:
-                resp4 = set_state(state_msg4)
-                self.dones[3] = False
+                resp_targ = set_state(state_target_msg)
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
@@ -225,14 +271,10 @@ class Env:
 
         self.move_cmd.linear.x = 0.0
         self.move_cmd.angular.z = 0.0
-        if id_bots == 999 or id_bots == tb3_0:
+        if id_bots == 3 or id_bots == tb3_0:
             self.pub_tb3_0.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_1:
+        if id_bots == 3 or id_bots == tb3_1:
             self.pub_tb3_1.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_2:
-            self.pub_tb3_2.publish(self.move_cmd)
-        if id_bots == 999 or id_bots == tb3_3:
-            self.pub_tb3_3.publish(self.move_cmd)
         self.rate.sleep()
 
         rospy.wait_for_service('phero_reset')
@@ -242,8 +284,45 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
+        
         self.dones = [False] * self.num_robots
 
+        ################################### Logging #########################################
+
+        if self.counter_step == 0:
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+
+        if self.counter_step != 0:
+            if (self.counter_collision != 0 or self.counter_success != 0 or self.counter_timeout !=0):
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
+                col_percentage = 100*self.counter_collision/(self.counter_success+self.counter_collision+self.counter_timeout)
+                tout_percentage = 100*self.counter_timeout/(self.counter_success+self.counter_collision+self.counter_timeout)
+            else:
+                succ_percentage = 0
+                col_percentage = 0
+                tout_percentage = 0
+            print("Counter: {}".format(self.counter_step))
+            print("Success: {}, Collision: {}, Timeout: {}".format(self.counter_success, self.counter_collision, self.counter_timeout))
+
+        if (self.counter_step % 10 == 0 and self.counter_step != 0):
+            print("Success Rate: {}%".format(succ_percentage))
+
+        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+            avg_comp = np.average(np.asarray(self.arrival_time))
+            std_comp = np.std(np.asarray(self.arrival_time))
+            print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
+            self.arrival_time = []
+            self.counter_collision = 0
+            self.counter_success = 0
+            self.counter_timeout = 0
+            self.target_index = 0
+        self.reset_timer = time.time()
+        
         return range(0, self.num_robots), initial_state
 
         # When turtlebot is collided with wall, obstacles etc - need to reset
@@ -253,10 +332,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.3
+        t.linear.x = action[0]*0.26
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(1, max(-1, action[1]*0.6))
+        t.angular.z = action[1]
         return t
     
     def posAngle(self, model_state):
@@ -271,11 +350,7 @@ class Env:
                 tb3_0 = i
             if model_state.name[i] == 'tb3_1':
                 tb3_1 = i
-            if model_state.name[i] == 'tb3_2':
-                tb3_2 = i
-            if model_state.name[i] == 'tb3_3':
-                tb3_3 = i
-        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1], model_state.pose[tb3_2], model_state.pose[tb3_3]]
+        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1]]
         for i in range(self.num_robots):
             # Write relationship between i and the index
             pose[i] = tb3_pose[i] # Need to find the better way to assign index for each robot
@@ -284,7 +359,7 @@ class Env:
             y[i] = pose[i].position.y
             angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
             theta[i] = angles[i][2]
-        idx = [tb3_0, tb3_1, tb3_2, tb3_3]
+        idx = [tb3_0, tb3_1]
         return x, y, theta, idx
 
     def angle0To360(self, angle):
@@ -330,7 +405,7 @@ class Env:
         angular_z = [i.angular.z for i in twists]
         linear_x_rsc = [i.linear.x for i in twists_rsc]
         angular_z_rsc = [i.angular.z for i in twists_rsc]
-        dones = self.dones
+        #print("stepdone: {}".format(self.dones))
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -341,15 +416,19 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            self.pub_tb3_0.publish(twists_rsc[0])
-            self.pub_tb3_1.publish(twists_rsc[1])
-            self.pub_tb3_2.publish(twists_rsc[2])
-            self.pub_tb3_3.publish(twists_rsc[3])
+            if self.dones[0] == True:
+                self.pub_tb3_0.publish(Twist())
+            else: self.pub_tb3_0.publish(twists_rsc[0])
+            if self.dones[1] == True:
+                self.pub_tb3_1.publish(Twist())
+            else: self.pub_tb3_1.publish(twists_rsc[1])
 
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
-        
+        step_time = time.time()
+        episode_time = step_time - self.reset_timer
+        #print("linear_x: {}, angular_z: {}".format(linear_x_rsc, angular_z_rsc))
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
@@ -372,17 +451,8 @@ class Env:
         angle_diff = self.anglepiTopi(angle_diff)
 
         # 4. Read pheromone (state) from the robot's position
-        # rospy.wait_for_service('phero_read')
-        # try:
-        #     phero_read = rospy.ServiceProxy('phero_read', PheroRead)
-        #     resp = phero_read(x, y)
-        # except rospy.ServiceException as e:
-        #     print("Service Failed %s"%e)
-        #print([wow.data for wow in resp.value])
         state = self.phero_ig.get_msg()
         phero_vals = [phero.data for phero in state.values]
-        #phero_rev = self.swap2elements([phero.data for phero in resp.value])  # To read each other's pheromone
-        #phero_vals = [phero for phero in phero_rev]
         
         # Concatenating the state array
         state_arr = np.asarray(phero_vals)
@@ -395,144 +465,56 @@ class Env:
         states = state_arr.reshape(self.num_robots, self.state_num)
 
         
-        # 6. Reward assignment
-        ## 6.0. Initialisation of rewards
-        distance_rewards = [0.0]*self.num_robots
-        phero_rewards = [0.0]*self.num_robots
-        goal_rewards = [0.0]*self.num_robots
-        angular_punish_rewards = [0.0]*self.num_robots
-        linear_punish_rewards = [0.0]*self.num_robots
-        time_rewards = [0.0]*self.num_robots        
-        ## 6.1. Distance Reward
-        goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
+        # 6. Reward assignment    
+        
+        
+        for i in range(self.num_robots):
+            if distance_to_goals[i] <= 0.3 and self.dones[i] == False:
+                self.is_goal += 1
+                self.dones[i] = True
+                print("goal?")
 
-        for i in range(self.num_robots):
-            if abs(goal_progress[i]) < 0.1:
-                print("Goal Progress: {}".format(goal_progress))
-                if goal_progress[i] >= 0:
-                        distance_rewards[i] = goal_progress[i] * 1.2
-                else:
-                        distance_rewards[i] = goal_progress[i]
-            else:
-                distance_rewards[i] = 0.0
-        # for i in range(self.num_robots):
-        #     if dones[i] == True:
-        #         distance_rewards[i] = 0.0
-        self.just_reset == False
-        
-        ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
-        #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
-        phero_rewards = [0.0, 0.0, 0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
-        
-        ## 6.3. Goal reward
-        ### Reset condition is activated when both two robots have arrived their goals 
-        ### Arrived robots stop and waiting
-        for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.5 and dones[i] == False:
-                goal_rewards[i] = 50.0
-                dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
-
-            
-        
-
-        ## 6.4. Angular speed penalty
-        for i in range(self.num_robots):
-            if abs(angular_z_rsc[i])>0.8:
-                angular_punish_rewards[i] = -1
-                if dones[i] == True:
-                    angular_punish_rewards[i] = 0.0
-        
-        ## 6.5. Linear speed penalty
-        for i in range(self.num_robots):
-            if linear_x_rsc[i] < 0.2:
-                linear_punish_rewards[i] = -0.0
-        for i in range(self.num_robots):
-            if dones[i] == True:
-                linear_punish_rewards[i] = 0.0
-        ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
-        #   it needs to be rewritten to really detect collision
-
-        distance_btw_robots = np.ones([self.num_robots, self.num_robots])
-        for i in range(self.num_robots):
-            for j in range(self.num_robots):
-                if j != i:
-                    distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2) # Python 
-
-
-        
-
+        distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
         collision_rewards = [0.0]*self.num_robots
-        print("distance_btw_robots: {}".format(distance_btw_robots))
-        for i in range(self.num_robots):
-            if any([dis <= 0.32 for dis in distance_btw_robots[i]]) == True:
-                print("Collision! Robot: {}".format(i))
-                collision_rewards[i] = -50.0
-                dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+        if distance_btw_robots <= 0.3 and self.dones[i] == False:
+            print("Collision!")
+            self.is_collided = True
+            for i in range(self.num_robots):
+                self.dones[i] = True
+            #self.reset(model_state, id_bots=3)
         
-        ## 6.7. Time penalty
-        #  constant time penalty for faster completion of episode
+        reset_flag = False
         for i in range(self.num_robots):
-            time_rewards[i] = -1.0
-            if dones[i] == True:
-                time_rewards[i] = 0.0
-        
-
-        # 7. Reset
-        ## 7.1. when robot goes too far from the target
-        # if distance_to_goal >= self.dis_rwd_norm:
-        #     self.reset()
-        #     time.sleep(0.5) 
-        
-        ## 7.2. when it collides to the target 
-        # obs_pos = [[2, 0]]
-        # dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2)]
-        # if dist_obs[0] < 0.1:
-        #     self.reset()
-        #     time.sleep(0.5)
-        ## 7.3. when the robot is out of the pheromone grid
-        test_time = time.time()
-        for i in range(self.num_robots):
-            if abs(x[i]) >= 5.5 or abs(y[i]) >= 5.5:
-                dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+            if abs(x[i]) >= 5.7 or abs(y[i]) >= 5.7:
+                print("Out of range!")
+                self.is_collided = True
+                self.dones[i] = True
+                if reset_flag == False:
+                    #self.reset(model_state, id_bots=3)
+                    reset_flag = True
+                    print("outofrange?")
+        if episode_time > 60:
+            self.is_timeout = True
+            for i in range(self.num_robots):
+                self.dones[i] = True
+                print("timeout?")
         
         ## 7.4. If all the robots are done with tasks, reset
-        # if all(flag == True for flag in dones) == True:
-        #     self.reset(model_state, id_bots=999)
-        #     for i in range(self.num_robots):
-        #         dones[i] = False
+        if all(flag == True for flag in self.dones) == True:
+            # self.is_goal = True
+            self.reset(model_state, id_bots=3)
+            # for i in range(self.num_robots):
+            #     dones[i] = False
 
-        self.dones = dones
-        #print("distance reward: {}".format(distance_reward*(3/time_step)))
-        #print("phero_reward: {}".format(phero_reward))
-        # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
-        #     self.stuck_indicator = 0
-        rewards = [a*(4/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
-        
+        # self.dones = dones
+        rewards = [0.0, 0.0]
         test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
         self.ep_len_counter = self.ep_len_counter + 1
-        print("-------------------")
-        print("Infos: {}".format(infos))
-        #print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
-        #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
-
-        #print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(4/time_step), distance_rewards[1]*(4/time_step)))
-        #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
-        #print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
-        #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
-        #print("Angular R: {}".format(angular_punish_reward))
-        #print("Linear R: {}".format(linear_punish_reward))
-        print("Linear: {}, Angular: {}".format(linear_x_rsc, angular_z_rsc))
-        print("Reward: {}".format(rewards))
-        print("Time diff: {}".format(test_time-test_time2))
-        
-        #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
-        return range(0, self.num_robots), states, rewards, dones, infos
+        #print("-------------------")
+        return range(0, self.num_robots), states, rewards, self.dones, infos, self.isExpDone
         
     def print_debug(self):
 

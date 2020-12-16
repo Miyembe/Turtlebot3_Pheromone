@@ -37,6 +37,9 @@ import scipy.io as sio
 
 
 class InfoGetter(object):
+    '''
+    Get Pheromone Information
+    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -58,6 +61,14 @@ class InfoGetter(object):
 
 
 class Env:
+
+    # ========================================================================= #
+	#                                Env Class                                  #
+	# ========================================================================= #
+
+    '''
+    Class of connecting Simulator and DRL training
+    '''
 
     def __init__(self):
 
@@ -134,6 +145,17 @@ class Env:
         
         self.is_collided = False
 
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Assign next positions and reset
+        3. Log the result in every selected time-step
+        '''
+
+        # ========================================================================= #
+	    #                            TARGET UPDATE                                  #
+	    # ========================================================================= #
+
         # ID assignment 
         tb3_0 = 3
         tb3_1 = 3
@@ -170,11 +192,10 @@ class Env:
         
         self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
         
-        
+        # ========================================================================= #
+	    #                                  RESET                                    #
+	    # ========================================================================= #
 
-
-        print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
-        
         # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
@@ -196,10 +217,6 @@ class Env:
         state_target_msg.pose.orientation.y = quat2[1]
         state_target_msg.pose.orientation.z = quat2[2]
         state_target_msg.pose.orientation.w = quat2[3]
-
-        # Reset Pheromone Grid
-        #
-        #
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -232,6 +249,7 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
+
         self.dones = [False] * self.num_robots
 
         return range(0, self.num_robots), initial_state
@@ -240,6 +258,9 @@ class Env:
         # def turtlebot_collsion(self):
 
     def action_to_twist(self, action):
+        '''
+        Convert Actions (2D array) to Twist (geometry.msgs)
+        '''
         t = Twist()
 
         # Rescale and clipping the actions
@@ -250,6 +271,9 @@ class Env:
         return t
     
     def posAngle(self, model_state):
+        '''
+        Function Returns Pose from ModelStates
+        '''
         pose = [None]*self.num_robots
         ori = [None]*self.num_robots
         x = [None]*self.num_robots
@@ -295,9 +319,17 @@ class Env:
         return tmp
 
     def step(self, actions, time_step=0.1):
-        # 20201010 How can I make the action input results in the change in state?
-        # I read tensorswarm, and it takes request and go one step.
-        # It waited until m_loop_done is True - at the end of the post step.
+        '''
+        Take a step with the given action from DRL in the Environment
+        0. Initialisation
+        1. Move Robot for given time step
+        2. Read robot pose
+        3. Calculation of distances
+        4. Read Pheromone
+        5. Reward Assignment
+        6. Reset
+        7. Other Debugging Related
+        '''
         
         # 0. Initiliasation
         start_time = time.time()
@@ -333,7 +365,7 @@ class Env:
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
-        print("linear_x: {}, angular_z: {}".format(linear_x_rsc, angular_z_rsc))
+
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
@@ -342,52 +374,39 @@ class Env:
         self.x_prev = x
         self.y_prev = y
 
-        # 3. Calculate the distance & angle difference to goal \
+        # 3. Calculate the distance & angle difference to goal 
         distance_to_goals = [None]*self.num_robots
         global_angle = [None]*self.num_robots
-        #print("x : {}, y: {}".format(x,y))
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
-
         theta = self.angle0To360(theta)
         global_angle = self.angle0To360(global_angle)
         angle_diff = [a_i - b_i for a_i, b_i in zip(global_angle, theta)]
         angle_diff = self.anglepiTopi(angle_diff)
 
         # 4. Read pheromone (state) from the robot's position
-        # rospy.wait_for_service('phero_read')
-        # try:
-        #     phero_read = rospy.ServiceProxy('phero_read', PheroRead)
-        #     resp = phero_read(x, y)
-        # except rospy.ServiceException as e:
-        #     print("Service Failed %s"%e)
-        #print([wow.data for wow in resp.value])
         state = self.phero_ig.get_msg()
         phero_vals = [phero.data for phero in state.values]
-        #phero_rev = self.swap2elements([phero.data for phero in resp.value])  # To read each other's pheromone
-        #phero_vals = [phero for phero in phero_rev]
-        
+
         # Concatenating the state array
         state_arr = np.asarray(phero_vals)
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
-
-        # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
 
         
-        # 6. Reward assignment
-        ## 6.0. Initialisation of rewards
+        # 5. Reward assignment
+        ## 5.0. Initialisation of rewards
         distance_rewards = [0.0]*self.num_robots
         phero_rewards = [0.0]*self.num_robots
         goal_rewards = [0.0]*self.num_robots
         angular_punish_rewards = [0.0]*self.num_robots
         linear_punish_rewards = [0.0]*self.num_robots
         time_rewards = [0.0]*self.num_robots        
-        ## 6.1. Distance Reward
+        ## 5.1. Distance Reward
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
         for i in range(self.num_robots):
@@ -404,11 +423,11 @@ class Env:
         #         distance_rewards[i] = 0.0
         self.just_reset == False
         
-        ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
+        ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
         phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
         phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
-        ## 6.3. Goal reward
+        ## 5.3. Goal reward
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
@@ -420,21 +439,22 @@ class Env:
             
         
 
-        ## 6.4. Angular speed penalty
+        ## 5.4. Angular speed penalty
         for i in range(self.num_robots):
             if abs(angular_z_rsc[i])>0.8:
                 angular_punish_rewards[i] = -1
                 if dones[i] == True:
                     angular_punish_rewards[i] = 0.0
         
-        ## 6.5. Linear speed penalty
+        ## 5.5. Linear speed penalty
         for i in range(self.num_robots):
             if linear_x_rsc[i] < 0.2:
                 linear_punish_rewards[i] = -2
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0
-        ## 6.6. Collision penalty
+
+        ## 5.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
         collision_rewards = [0.0]*self.num_robots
@@ -445,55 +465,48 @@ class Env:
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
         
-        ## 6.7. Time penalty
+        ## 5.7. Time penalty
         #  constant time penalty for faster completion of episode
         for i in range(self.num_robots):
             time_rewards[i] = -1.0
             if dones[i] == True:
                 time_rewards[i] = 0.0
         
+        ## 5.8. Sum of Rewards
+        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = np.asarray(rewards).reshape(self.num_robots)
 
-        # 7. Reset
-        ## 7.1. when robot goes too far from the target
+        # 6. Reset
+        ## 6.1. when robot goes too far from the target
         # if distance_to_goal >= self.dis_rwd_norm:
         #     self.reset()
         #     time.sleep(0.5) 
         
-        ## 7.2. when it collides to the target 
+        ## 6.2. when it collides to the target 
         # obs_pos = [[2, 0]]
         # dist_obs = [sqrt((x-obs_pos[0][0])**2+(y-obs_pos[0][1])**2)]
         # if dist_obs[0] < 0.1:
         #     self.reset()
         #     time.sleep(0.5)
-        ## 7.3. when the robot is out of the pheromone grid
-        test_time = time.time()
+        ## 6.3. when the robot is out of the pheromone grid
         for i in range(self.num_robots):
             if abs(x[i]) >= 4.7 or abs(y[i]) >= 4.7:
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
         
-        ## 7.4. If all the robots are done with tasks, reset
+        ## 6.4. If all the robots are done with tasks, reset
         if all(flag == True for flag in dones) == True:
             self.reset(model_state, id_bots=3)
             for i in range(self.num_robots):
                 dones[i] = False
 
         self.dones = dones
-        #print("distance reward: {}".format(distance_reward*(3/time_step)))
-        #print("phero_reward: {}".format(phero_reward))
-        # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
-        #     self.stuck_indicator = 0
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
         
-        test_time2 = time.time()
-        rewards = np.asarray(rewards).reshape(self.num_robots)
+        # 7. Other Debugging 
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
         print("Infos: {}".format(infos))
-        #print("Robot 1, x: {}, y: {}, ps: {}".format(x[0], y[0], phero_sums[0]))
-        #print("Robot 2, x: {}, y: {}, ps: {}".format(x[1], y[1], phero_sums[1]))
-
         print("Distance R1: {}, R2: {}".format(distance_rewards[0]*(5/time_step), distance_rewards[1]*(5/time_step)))
         #print("Phero R1: {}, R2: {}".format(phero_rewards[0], phero_rewards[1]))
         #print("Goal R1: {}, R2: {}".format(goal_rewards[0], goal_rewards[1]))
@@ -502,15 +515,8 @@ class Env:
         #print("Linear R: {}".format(linear_punish_reward))
         print("Linear: {}, Angular: {}".format(linear_x_rsc, angular_z_rsc))
         print("Reward: {}".format(rewards))
-        print("Time diff: {}".format(test_time-test_time2))
-        
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), states, rewards, dones, infos
-        
-    def print_debug(self):
-
-        # For debugging. return any data you want. 
-        print("Phero Info: {}".format(self.phero_info))
 
 if __name__ == '__main__':
     try:

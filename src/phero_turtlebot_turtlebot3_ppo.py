@@ -179,6 +179,8 @@ class Env:
         linear_x = 0.5 * (linear_x + 1) # only forward motion
         angular_z = angular_z
 
+        print("twist: [{}, {}]".format(linear_x, angular_z))
+
         self.move_cmd.linear.x = linear_x
         self.move_cmd.angular.z = angular_z
         action = np.array([linear_x, angular_z])

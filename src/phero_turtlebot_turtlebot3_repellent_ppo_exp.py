@@ -17,6 +17,7 @@ from std_srvs.srv import Empty
 from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
 
 import time
+import csv
 import tensorflow
 import threading
 from keras.models import Sequential, Model
@@ -31,9 +32,6 @@ import random
 
 
 class InfoGetter(object):
-    '''
-    Get Pheromone Information
-    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -56,20 +54,12 @@ class InfoGetter(object):
 
 class Env:
 
-    # ========================================================================= #
-	#                                Env Class                                  #
-	# ========================================================================= #
-
-    '''
-    Class of connecting Simulator and DRL training
-    '''
-
     def __init__(self):
 
         # Settings
         self.num_robots = 1
 
-        # Node Initialisation
+        # Node initialisation
         self.node = rospy.init_node('phero_turtlebot_env', anonymous=True)
         self.pose_ig = InfoGetter()
         self.phero_ig = InfoGetter()
@@ -84,6 +74,7 @@ class Env:
 
         ## tf related lines. Needed for real turtlebot odometry reading.
         #   Skip for now. 
+        #
 
         self.rate = rospy.Rate(100)
 
@@ -122,6 +113,28 @@ class Env:
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
 
+        # File name
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
+        self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
+        print(self.file_name)
+
+        # Experiments
+        self.isExpDone = False
+   
+        self.counter_step = 0
+        self.counter_collision = 0
+        self.counter_success = 0
+        self.counter_timeout = 0
+        self.arrival_time = []
+        
+        self.is_reset = False
+        self.is_collided = False
+        self.is_goal = 0
+        self.is_timeout = False
+        self.done = False
+
+        self.reset_timer = time.time()
+
     #To be done when real robots are used
     
     #def get_odom(self):
@@ -129,19 +142,48 @@ class Env:
     #def print_odom(self):
 
     def reset(self):
-
-        '''
-        Resettng the Experiment
-        1. Update the counter based on the flag from step
-        2. Assign next positions and reset
-        3. Log the result in every selected time-step
-        '''
-
-        # ========================================================================= #
-	    #                            TARGET UPDATE                                  #
-	    # ========================================================================= #
         
+        #self.is_collided = False
+
+        #Increment Collision Counter
+        if self.is_collided == True:
+            print("Collision!")
+            self.counter_collision += 1
+            self.counter_step += 1
+
+        # Increment Arrival Counter and store the arrival time
+        if self.is_goal == True:
+            print("Arrived goal!")
+            self.counter_success += 1
+            self.counter_step += 1
+            arrived_timer = time.time()
+            art = arrived_timer-self.reset_timer
+            self.arrival_time.append(art)
+            print("Episode time: %0.2f"%art)
+
+        if self.is_timeout == True:
+            self.counter_timeout += 1
+            self.counter_step += 1
+            print("Timeout!")
+
+        # Reset the flags
         self.is_collided = False
+        self.is_goal = False
+        self.is_timeout = False
+        # index_list = [-1, 0, 1]
+        # index_x = random.choice(index_list)
+
+        # if index_x==0:
+        #     index_list1 = [-1, 1]
+        #     index_y = random.choice(index_list1)
+        # else:
+        #     index_list1 = [-1, 0, 1]
+        #     index_y = random.choice(index_list1)
+
+
+        # self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
+        # self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
+        
 
         angle_target = self.target_index*2*pi/self.num_experiments        
 
@@ -153,10 +195,6 @@ class Env:
         else:
             self.target_index = 0
         
-
-        # ========================================================================= #
-	    #                                  RESET                                    #
-	    # ========================================================================= #
 
         # Reset Turtlebot position
         state_msg = ModelState()
@@ -180,6 +218,10 @@ class Env:
         state_target_msg.pose.orientation.z = -0.2
         state_target_msg.pose.orientation.w = 0
 
+        # Reset Pheromone Grid
+        #
+        #
+
         rospy.wait_for_service('gazebo/reset_simulation')
 
         rospy.wait_for_service('/gazebo/set_model_state')
@@ -190,7 +232,7 @@ class Env:
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
-        initial_state = np.zeros(self.state_num)
+        initial_state = np.zeros(self.state_num).reshape(1,self.state_num)
 
         self.move_cmd.linear.x = 0.0
         self.move_cmd.angular.z = 0.0
@@ -207,27 +249,60 @@ class Env:
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
 
+        ################################### Logging #########################################
+
+        if self.counter_step == 0:
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+
+        if self.counter_step != 0:
+            if (self.counter_collision != 0 and self.counter_success != 0):
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
+                col_percentage = 100*self.counter_collision/(self.counter_success+self.counter_collision+self.counter_timeout)
+                tout_percentage = 100*self.counter_timeout/(self.counter_success+self.counter_collision+self.counter_timeout)
+            else:
+                succ_percentage = 0
+                col_percentage = 0
+                tout_percentage = 0
+            print("Counter: {}".format(self.counter_step))
+
+        if (self.counter_step % 10 == 0 and self.counter_step != 0):
+            print("Success Rate: {}%".format(succ_percentage))
+
+        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+            avg_comp = np.average(np.asarray(self.arrival_time))
+            std_comp = np.std(np.asarray(self.arrival_time))
+            print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
+            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
+                print("Successfully Logged.")
+            self.arrival_time = []
+            self.counter_collision = 0
+            self.counter_success = 0
+            self.counter_timeout = 0
+            self.target_index = 0
+        self.reset_timer = time.time()
+        
+
+        self.done = False
         return range(0, self.num_robots), initial_state
 
+        # When turtlebot is collided with wall, obstacles etc - need to reset
+        # def turtlebot_collsion(self):
+
     def step(self, time_step=0.1, linear_x=0.2, angular_z=0.0):
-        '''
-        Take a step with the given action from DRL in the Environment
-        0. Initialisation
-        1. Move Robot for given time step
-        2. Read robot pose
-        3. Calculation of distances
-        4. Read Pheromone
-        5. Reward Assignment
-        6. Reset
-        7. Other Debugging Related
-        '''
-        # 0. Initialisation
+        # 20201010 How can I make the action input results in the change in state?
+        # I read tensorswarm, and it takes request and go one step.
+        # It waited until m_loop_done is True - at the end of the post step.
+        
+        # 0. Initiliasation
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
 
         # rescaling the action
-        print("twist: [{}, {}]".format(linear_x, angular_z))
         linear_x = linear_x*0.4
         linear_x = min(1, max(-1, linear_x))
         linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
@@ -237,7 +312,7 @@ class Env:
         self.move_cmd.angular.z = angular_z_rsc
         action = np.array([linear_x_rsc, angular_z_rsc])
         self.rate.sleep()
-        done = False
+        self.done = False
 
         # position of turtlebot before taking steps
         model_state = self.pose_ig.get_msg()
@@ -245,16 +320,16 @@ class Env:
         x_previous = pose.position.x
         y_previous = pose.position.y
         distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
-
         # 1. Move robot with the action input for time_step
-        while (record_time_step < time_step and done == False):
+        while (record_time_step < time_step):
             self.pub.publish(self.move_cmd)
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
 
+        step_time = time.time()
+        episode_time = step_time - self.reset_timer
         # 2. Read the position and angle of robot
-
         model_state = self.pose_ig.get_msg()
         pose = model_state.pose[self.model_index]
         ori = pose.orientation
@@ -286,85 +361,100 @@ class Env:
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
         state_arr = np.append(state_arr, angle_diff)
+        # 5. State reshape
         state = state_arr.reshape(1, self.state_num)
 
-        # 5. Reward assignment
-        ## 5.0. Initialisation of rewards
+        # 6. Reward assignment
+        ## 6.0. Initialisation of rewards
         distance_reward = 0.0
         phero_reward = 0.0
         goal_reward = 0.0
         
-        ## 5.1. Distance Reward
-        goal_progress = distance_to_goal_prv - distance_to_goal
-        if goal_progress >= 0:
-            distance_reward = goal_progress * 1.2
-        else:
-            distance_reward = goal_progress
+        ## 6.1. Distance Reward
+        # goal_progress = distance_to_goal_prv - distance_to_goal
+        # if goal_progress >= 0:
+        #     distance_reward = goal_progress *1.2
+        # else:
+        #     distance_reward = goal_progress
         
-        ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
+        ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
         #phero_sum = np.sum(phero_vals)
         phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
-    
-        ## 5.3. Goal reward
+        #print("------------------------")
+        #print("State: {}".format(phero_vals))
+        ## 6.3. Goal reward
         if distance_to_goal <= 0.3:
-            goal_reward = 50.0
-            done = True
-            self.reset()
+            self.is_goal = True
+            self.done = True
+            #self.reset()
             time.sleep(1)
 
-        ## 5.4. Angular speed penalty
-        angular_punish_reward = 0.0
-        if abs(angular_z_rsc) > 0.8:
-            angular_punish_reward = -1
+        ## 6.4. Angular speed penalty
+        # angular_punish_reward = 0.0
+        # if abs(angular_z_rsc) > 0.8:
+        #     angular_punish_reward = -1
         
-        ## 5.5. Linear speed penalty
-        linear_punish_reward = 0.0
-        if linear_x_rsc < 0.2:
-            linear_punish_reward = -1
-        ## 5.6. Collision penalty
+        ## 6.5. Linear speed penalty
+        # linear_punish_reward = 0.0
+        # if linear_x_rsc < 0.2:
+        #     linear_punish_reward = -1
+        ## 6.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
-        collision_reward = 0.0
+        #collision_reward = 0.0
         obs_pos = [[2, 0],[-2,0],[0,2],[0,-2]]
         dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
         for i in range(len(obs_pos)):
             if dist_obs[i] < 0.3:
-                collision_reward = -50
-                self.reset()
+                self.is_collided = True
+                self.done = True
                 time.sleep(0.5)
+                
+        if episode_time > 60:
+            self.is_timeout = True
+            self.done = True
 
-        ## 5.7. Sum of Rewards
-        reward = distance_reward*(4/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward + collision_reward
-        reward = np.asarray(reward).reshape(1)
+        # 7. Reset
+        ## 7.1. when robot goes too far from the target
+        # if distance_to_goal >= self.dis_rwd_norm:
+        #     self.reset()
+        #     time.sleep(0.5) 
 
-        # 6. Reset
-        ## 6.1. when robot goes too far from the target
-        if distance_to_goal >= self.dis_rwd_norm:
-            self.reset()
-            time.sleep(0.5) 
-
-        ## 6.2. when the robot is out of the pheromone grid
+        ## 7.2. when the robot is out of the pheromone grid
         if abs(x) >= 4.7 or abs(y) >= 4.7:
+            print("Out of range!")
+            self.is_collided = True
+            self.done = True
+    
+        if self.done == True:
             self.reset()
-            time.sleep(0.5)
-        end_time = time.time()
-        step_time = end_time - start_time
-        # 7. Other Debugging 
+
+        #print("distance reward: {}".format(distance_reward*(3/time_step)))
+        #print("phero_reward: {}".format(phero_reward))
+        # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
+        #     self.stuck_indicator = 0
+
+        reward = [0.0]#distance_reward*(4/time_step) + phero_reward + goal_reward + angular_punish_reward + linear_punish_reward + collision_reward
+        reward = np.asarray(reward).reshape(1)
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1
-        print("-------------------")
-        print("Ep: {}".format(self.ep_len_counter))
-        print("Step time: {}".format(step_time))
-        print("GP: {}".format(goal_progress))
-        print("Target: ({}, {})".format(self.target_x, self.target_y))
-        print("Distance R: {}".format(distance_reward*(4/time_step)))
-        print("Phero R: {}".format(phero_reward))
-        print("Goal R: {}".format(goal_reward))
-        print("Angular R: {}".format(angular_punish_reward))
-        print("Linear R: {}".format(linear_punish_reward))
-        print("Collision R: {}".format(collision_reward))
-        print("Reward: {}".format(reward))
+        # print("-------------------")
+        # print("Ep: {}".format(self.ep_len_counter))
+        # print("Target: ({}, {})".format(self.target_x, self.target_y))
+        # print("Distance R: {}".format(distance_reward*(4/time_step)))
+        # print("Phero R: {}".format(phero_reward))
+        # print("Goal R: {}".format(goal_reward))
+        # print("Angular R: {}".format(angular_punish_reward))
+        # print("Linear R: {}".format(linear_punish_reward))
+        # print("Collision R: {}".format(collision_reward))
+        # print("Reward: {}".format(reward))
+        #print("**********************")
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
-        return range(0, self.num_robots), state, reward, done, info
+        return range(0, self.num_robots), state, reward, self.done, info
+        
+    def print_debug(self):
+
+        # For debugging. return any data you want. 
+        print("Phero Info: {}".format(self.phero_info))
 
 if __name__ == '__main__':
     try:

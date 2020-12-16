@@ -67,8 +67,8 @@ class WaypointNavigation:
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
 
         self.BIAS = 0.25
-        self.V_COEF = self.v_range[0]
-        self.W_COEF = self.w_range[0]
+        self.V_COEF = 1.0#self.v_range[0]
+        self.W_COEF = 0.2#self.w_range[0]
 
         #self.b_size = self.b_range.size        
         self.v_size = self.v_range.size
@@ -100,29 +100,6 @@ class WaypointNavigation:
         self.reset_timer = time.time()
         self.reset()
         self.reset_flag = False
-
-        
-
-
-    # def RandomTwist(self):
-
-    #     twist = Twist()
-    #     twist.linear.x = self.MAX_FORWARD_SPEED * random.random()
-    #     twist.angular.z = self.MAX_ROTATION_SPEED * (random.random() - 0.5)
-    #     print(twist)
-    #     return twist
-    # def testCallback(self, message):
-    #     for i in range(len(message.name)):
-    #         if message.name[i] == 'turtlebot3_waffle_pi':
-    #             tb3 = i
-    #             #print("tb3: {}".format(tb3))
-    #             #print("name: {}".format(message.name[tb3]))
-    #         if message.name[i] == 'unit_sphere_0_0':
-    #             tg = i
-    #     pose = message.pose[tb3]
-    #     twist = message.twist[tb3]
-    #     print("===========")
-    #     print('Test position: {}'.format(pose.position))
         
     def ReadPhero(self, message):
         phero_data = message.data 
@@ -131,14 +108,21 @@ class WaypointNavigation:
 
     def Callback(self, message, cargs):
 
+        '''
+        Main Function
+        - Receive position data
+        - Generate action
+        '''
+        # ========================================================================= #
+	    #                           Initialisation                                  #
+	    # ========================================================================= #
+
         pub, msg, goal = cargs
         goal = self.goal
         
         for i in range(len(message.name)):
             if message.name[i] == 'turtlebot3_waffle_pi':
                 tb3 = i
-                #print("tb3: {}".format(tb3))
-                #print("name: {}".format(message.name[tb3]))
             if message.name[i] == 'unit_sphere_0_0':
                 tg = i
         pose = message.pose[tb3]
@@ -149,8 +133,7 @@ class WaypointNavigation:
         angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
 
         theta = angles[2]
-        #theta = pos.theta
-        #how to make gazebo grid map
+
         # P controller
         v = 0
         w = 0
@@ -162,6 +145,10 @@ class WaypointNavigation:
         # Reset condition reset (to prevent unwanted reset due to delay of position message subscription)
         step_timer = time.time()
         reset_time = step_timer - self.reset_timer
+
+        # ========================================================================= #
+	    #                          Action & State assignment                        #
+	    # ========================================================================= #
 
         if (self.phero_sum > self.pheroThr):
             msg = self.PheroOA(self.phero)
@@ -193,10 +180,7 @@ class WaypointNavigation:
             print("Times up!")
             self.is_timeout = True
             self.reset()
-            
-        # if (distance <= self.distThr and index < len(goal)-1):
-        #     self.index += 1 
-        #     print("Goal has been changed: ({}, {})".format(goal[self.index][0], goal[self.index][1]))
+
 
         # Publish velocity 
         self.pub.publish(msg)
@@ -212,6 +196,12 @@ class WaypointNavigation:
     
     # Angular velocity coefficient (When avg phero is high, it is more sensitive)
     def velCoef(self, value1, value2):
+        '''
+        - val_avg (0, 1)
+        - val_dif (-1, 1)
+        - dif_coef (1, 2.714)
+        - coefficient (-2.714, 2.714)
+        '''
         val_avg = (value1 + value2)/2
         val_dif = value1 - value2
         dif_coef = exp(val_avg)
@@ -257,6 +247,18 @@ class WaypointNavigation:
         return twist
     
     def reset(self):
+        
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Assign next positions and reset
+        3. Log the result in every selected time-step
+        '''
+
+
+        # ========================================================================= #
+	    #                           COUNTER UPDATE                                  #
+	    # ========================================================================= #
 
         # Increment Collision Counter
         if self.is_collided == True:
@@ -279,31 +281,15 @@ class WaypointNavigation:
             self.counter_step += 1
             print("Timeout!")
             
-
-
-
         # Reset the flags
         self.is_collided = False
         self.is_goal = False
         self.is_timeout = False
 
-        # index_list = [-1, 0, 1]
-        # index_x = random.choice(index_list)
+        # ========================================================================= #
+	    #                                  RESET                                    #
+	    # ========================================================================= #
 
-        # if index_x==0:
-        #     index_list1 = [-1, 1]
-        #     index_y = random.choice(index_list1)
-        # else:
-        #     index_list1 = [-1, 0, 1]
-        #     index_y = random.choice(index_list1)
-
-
-        # self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
-        # self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
-        # polarity_list = [-1, 1]
-        # self.target_x = (np.random.random())*4
-        # self.target_y = sqrt(16-self.target_x**2)*random.choice(polarity_list)
-        
         angle_target = self.target_index*2*pi/self.num_experiments        
 
         self.target_x = self.radius*cos(angle_target)
@@ -313,23 +299,6 @@ class WaypointNavigation:
             self.target_index += 1
         else:
             self.target_index = 0
-        # idx = self.index_num
-
-        # idx = random.choice(index_list)
-        # if idx == 1:
-        #     self.target_x = (np.random.random())
-        #     self.target_y = sqrt(16-self.target_x**2)
-        # elif idx == 2:
-        #     self.target_x = (np.random.random())
-        #     self.target_y = -sqrt(16-self.target_x**2)
-        # elif idx == 3:
-        #     self.target_y = (np.random.random())
-        #     self.target_x = -sqrt(16-self.target_y**2)    
-        # elif idx == 4:
-        #     self.target_y = (np.random.random())
-        #     self.target_x = sqrt(16-self.target_y**2)
-        
-        
         
         self.is_collided = False
 
@@ -368,9 +337,7 @@ class WaypointNavigation:
         self.move_cmd.linear.x = 0.0
         self.move_cmd.angular.z = 0.0
         self.pub.publish(self.move_cmd)
-        #time.sleep(5)
         self.pub.publish(self.move_cmd)
-        #self.rate.sleep()
 
         rospy.wait_for_service('phero_reset')
         try:
@@ -381,7 +348,9 @@ class WaypointNavigation:
             print("Service Failed %s"%e)
 
         
-        # Writing files
+        # ========================================================================= #
+	    #                                  LOGGING                                  #
+	    # ========================================================================= #
         
         if self.counter_step == 0:
             with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
@@ -409,26 +378,19 @@ class WaypointNavigation:
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.BIAS, '%0.2f'%self.V_COEF, '%0.2f'%self.W_COEF, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             
             self.paramUpdate()
-            print("before del: {}, {}, {}".format(self.arrival_time, self.counter_collision, self.counter_success))
             self.arrival_time = []
             self.counter_collision = 0
             self.counter_success = 0
             self.target_index = 0
-            print("after del: {}, {}, {}".format(self.arrival_time, self.counter_collision, self.counter_success))
+            
 
         self.reset_timer = time.time()
         self.reset_flag = True
-        #distance_to_obs = [1.0]*len(self.obstacle)
-        #print("pos.x: {}, pos.y: {}".format(pos.x, pos.y))
-        # while (any(dobs <= 0.3 for dobs in distance_to_obs) == True):
-        #     for i in range(len(distance_to_obs)):
-        #         distance_to_obs[i] = sqrt((pos.x-self.obstacle[i][0])**2+(pos.y-self.obstacle[i][1])**2)
-        #     time.sleep(1)
         
 
     def paramUpdate(self):
         '''
-        - (0,0,0) -> (4,4,4)
+        Parameter update after the number of experiments for a parameter set finished
         '''
         print("Parameters are updated!")
         if (self.w_counter < self.w_size-1):
