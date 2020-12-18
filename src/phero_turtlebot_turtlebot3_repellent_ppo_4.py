@@ -402,7 +402,8 @@ class Env:
         goal_rewards = [0.0]*self.num_robots
         angular_punish_rewards = [0.0]*self.num_robots
         linear_punish_rewards = [0.0]*self.num_robots
-        time_rewards = [0.0]*self.num_robots        
+        time_rewards = [0.0]*self.num_robots
+        ooa_rewards = [0.0]*self.num_robots        
         ## 6.1. Distance Reward
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
@@ -428,7 +429,7 @@ class Env:
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.5 and dones[i] == False:
+            if distance_to_goals[i] <= 0.5:
                 goal_rewards[i] = 50.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
@@ -475,9 +476,17 @@ class Env:
         ## 6.7. Time penalty
         #  constant time penalty for faster completion of episode
         for i in range(self.num_robots):
-            time_rewards[i] = -1.0
+            time_rewards[i] = 0.0 # 20201217 I nullified the time_rewards
             if dones[i] == True:
                 time_rewards[i] = 0.0
+
+        ## 6.8. Out of Arena penalty
+        for i in range(self.num_robots):
+            if abs(x[i]) >= 5.5 or abs(y[i]) >= 5.5:
+                dones[i] = True
+                ooa_rewards[i] = -30.0
+                self.reset(model_state, id_bots=idx[i])
+            
         
 
         # 7. Reset
@@ -494,10 +503,7 @@ class Env:
         #     time.sleep(0.5)
         ## 7.3. when the robot is out of the pheromone grid
         test_time = time.time()
-        for i in range(self.num_robots):
-            if abs(x[i]) >= 5.5 or abs(y[i]) >= 5.5:
-                dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+        
         
         ## 7.4. If all the robots are done with tasks, reset
         # if all(flag == True for flag in dones) == True:
@@ -510,7 +516,7 @@ class Env:
         #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
-        rewards = [a*(4/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(4/time_step)+b+c+d+e+f+g+h for a, b, c, d, e, f, g, h in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards, ooa_rewards)]
         
         test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)
