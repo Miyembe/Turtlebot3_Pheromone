@@ -95,7 +95,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 14 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -381,12 +381,13 @@ class Env:
         #print([wow.data for wow in resp.value])
         state = self.phero_ig.get_msg()
         phero_vals = [phero.data for phero in state.values]
-        print("Phero_vals: {}".format(phero_vals))
+        #print("Phero_vals: {}".format(phero_vals))
         #phero_rev = self.swap2elements([phero.data for phero in resp.value])  # To read each other's pheromone
         #phero_vals = [phero for phero in phero_rev]
         
         # Concatenating the state array
         state_arr = np.asarray(phero_vals)
+        state_arr = np.hstack((state_arr, np.asarray(theta).reshape(self.num_robots, 1)))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
@@ -408,17 +409,20 @@ class Env:
         ## 6.1. Distance Reward
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
+        time_step_factor = 4/time_step
         for i in range(self.num_robots):
             if abs(goal_progress[i]) < 0.1:
                 if goal_progress[i] >= 0:
-                        distance_rewards[i] = goal_progress[i] * 1.2
+                        distance_rewards[i] = goal_progress[i]
                 else:
                         distance_rewards[i] = goal_progress[i]
             else:
                 distance_rewards[i] = 0.0
+            distance_rewards[i] *= time_step_factor
         # for i in range(self.num_robots):
         #     if dones[i] == True:
         #         distance_rewards[i] = 0.0
+        
         self.just_reset == False
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
@@ -430,7 +434,7 @@ class Env:
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
             if distance_to_goals[i] <= 0.5:
-                goal_rewards[i] = 50.0
+                goal_rewards[i] = 100.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
 
@@ -456,19 +460,23 @@ class Env:
         #   it needs to be rewritten to really detect collision
 
         distance_btw_robots = np.ones([self.num_robots, self.num_robots])
+        distance_to_obstacle = np.ones(self.num_robots)
         for i in range(self.num_robots):
+            distance_to_obstacle[i] = sqrt((x[i])**2+(y[i])**2)
             for j in range(self.num_robots):
                 if j != i:
                     distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2) # Python 
-
-
-        
+        print("dto: {}".format(distance_to_obstacle))
 
         collision_rewards = [0.0]*self.num_robots
         for i in range(self.num_robots):
             if any([dis <= 0.32 for dis in distance_btw_robots[i]]) == True:
                 print("Collision! Robot: {}".format(i))
-                collision_rewards[i] = -50.0
+                collision_rewards[i] = -60.0
+                dones[i] = True
+                self.reset(model_state, id_bots=idx[i])
+            elif distance_to_obstacle[i] < 0.3:
+                collision_rewards[i] = -60.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
         
@@ -481,9 +489,10 @@ class Env:
 
         ## 6.8. Out of Arena penalty
         for i in range(self.num_robots):
-            if abs(x[i]) >= 5.5 or abs(y[i]) >= 5.5:
+            if abs(x[i]) >= 5.4 or abs(y[i]) >= 5.4:
+                if distance_to_goals[i] > 6:
+                    ooa_rewards[i] = -30.0
                 dones[i] = True
-                ooa_rewards[i] = -30.0
                 self.reset(model_state, id_bots=idx[i])
             
         
@@ -515,7 +524,7 @@ class Env:
         #print("phero_reward: {}".format(phero_reward))
         # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
         #     self.stuck_indicator = 0
-        rewards = [a*(4/time_step)+b+c+d+e+f+g+h for a, b, c, d, e, f, g, h in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards, ooa_rewards)]
+        rewards = [a+b+c+d+e+f+g+h for a, b, c, d, e, f, g, h in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards, ooa_rewards)]
         
         test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)

@@ -3,8 +3,8 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
-import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
+# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
+# import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
 import os
 import numpy as np
 import tf
@@ -35,14 +35,17 @@ class Node():
         for i in range(self.num_robots):
             self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.2, diffusion = 0)
             self.pheromone[i].isDiffusion = False
-        #self.pheromone.append(Pheromone('static', 180, 0))
+        phero_static = Pheromone('static', size = 12, res = 10, evaporation = 180, diffusion = 0)
+        phero_static.isDiffusion = False
+        phero_static.isEvaporation = False
+        self.pheromone.append(phero_static)
 
         self.phero_max = 1.0
         self.phero_min = 0.0
         self.is_phero_inj = True
 
         # Publisher & Subscribers
-        self.pub_phero = rospy.Publisher('/phero_value', fma, queue_size=10)
+        self.pub_phero = rospy.Publisher('/phero_value', fma, queue_size=1)
         self.sub_pose = rospy.Subscriber('/gazebo/model_states', ModelStates, self.pheroCallback)
         #self.sub_inj = rospy.Subscriber('/phero_inj', Bool, self.injCallback)
         
@@ -113,7 +116,6 @@ class Node():
         x = float(x) / phero.resolution 
         
     def pheroCallback(self, message):
-        
         #tb3 = [None]*self.num_robots
 
         for i in range(len(message.name)):
@@ -192,25 +194,22 @@ class Node():
                 for j in range(3):
                     phero_sum = sum([phero_dy.getPhero(x_idx[n]+i-1, y_idx[n]+j-1) for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%n not in phero_dy.name)])
                     phero_name = []
-                    clipped_sum = min(self.phero_max, max(phero_sum, self.phero_min))
                     phero_val[n].append(phero_sum) # Read the sum of other robots pheromone
-            phero_arr[n].data = phero_val[n]
+            
                     # Check if it works well
                     # 20201215 clipping must be added
-        print("phero_val: {}".format(phero_val))
                     
                     
 
         # Static pheromone
-        # for n in range(self.num_robots):
-        #     for i in range(3):
-        #         for j in range(3):
-        #             static_phero = phero_st for phero_st in self.pheromone if 'static' in phero_st.name
-        #             phero_val[n] += static_phero.getPhero(x_index+i-1, y_index+j-1)
-        #             print("Phero_val[n]: {} - static".format(phero_val[n])
-        #             phero_val[n] = min(self.phero_max, max(self.phero_min, phero_val[n]))
-        #             print("Phero_val[n]: {} - clipped".format(phero_val[n]))
-
+        for n in range(self.num_robots):
+            for i in range(3):
+                for j in range(3):
+                    static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name][0]
+                    phero_val[n][j+3*i] += static_phero.getPhero(x_idx[n]+i-1, y_idx[n]+j-1)
+                    phero_val[n][j+3*i] = min(self.phero_max, max(self.phero_min, phero_val[n][j+3*i]))
+            phero_arr[n].data = phero_val[n]
+        print("phero_val: {}".format(phero_val))
         # Clipping pheromone value
 
         # Return pheromone value to each robot
@@ -286,7 +285,7 @@ class Node():
                 for i in range(self.num_robots):  # Reset the pheromone grid
                     self.pheromone[i].reset()
                     if 'static' in self.pheromone[i].name:
-                        self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
+                        self.pheromone.load("tcds_exp3") # you can load any types of pheromone grid
                 print("Pheromone grid reset!")
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
