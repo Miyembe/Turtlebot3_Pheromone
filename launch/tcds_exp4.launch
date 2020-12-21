@@ -8,39 +8,39 @@
   <arg name="fifth_tb3" default="tb3_4" />
   <arg name="sixth_tb3" default="tb3_5" />
 
-  <arg name="x_pos1" default="-2.5"/>
+  <arg name="x_pos1" default="-3.0"/>
   <arg name="y_pos1" default="0.0"/>
   <arg name="z_pos1" default="0.0"/>
   <arg name="yaw_1"  default="0.0"/>
 
-  <arg name="x_pos2" default="2.5"/>
+  <arg name="x_pos2" default="3.0"/>
   <arg name="y_pos2" default="0.0"/>
   <arg name="z_pos2" default="0.0"/>
   <arg name="yaw_2"  default="3.14"/>
 
-  <arg name="x_pos3" default="0.0"/>
+  <arg name="x_pos3" default="3.0"/>
   <arg name="y_pos3" default="-2.5"/>
   <arg name="z_pos3" default="0.0"/>
-  <arg name="yaw_3"  default="1.57"/>
+  <arg name="yaw_3"  default="3.14"/>
 
-  <arg name="x_pos4" default="0.0"/>
-  <arg name="y_pos4" default="2.5"/>
+  <arg name="x_pos4" default="-3.0"/>
+  <arg name="y_pos4" default="-2.5"/>
   <arg name="z_pos4" default="0.0"/>
-  <arg name="yaw_4"  default="-1.57"/>
+  <arg name="yaw_4"  default="0.0"/>
 
-  <arg name="x_pos5" default="0.4"/>
+  <arg name="x_pos5" default="3.0"/>
   <arg name="y_pos5" default="2.5"/>
   <arg name="z_pos5" default="0.0"/>
-  <arg name="yaw_5"  default="-1.57"/>
+  <arg name="yaw_5"  default="3.14"/>
 
-  <arg name="x_pos6" default="0.9"/>
+  <arg name="x_pos6" default="-3.0"/>
   <arg name="y_pos6" default="2.5"/>
   <arg name="z_pos6" default="0.0"/>
-  <arg name="yaw_6"  default="-1.57"/>
+  <arg name="yaw_6"  default="0.0"/>
 
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find turtlebot3_pheromone)/worlds/empty_arena.world"/>
+    <arg name="world_name" value="$(find turtlebot3_pheromone)/worlds/tcds_exp4.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
@@ -101,7 +101,7 @@
       <param name="tf_prefix" value="$(arg fifth_tb3)" />
     </node>
     
-    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg fifth_tb3) -x $(arg x_pos4) -y $(arg y_pos4) -z $(arg z_pos4) -Y $(arg yaw_4) -param robot_description" />
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg fifth_tb3) -x $(arg x_pos5) -y $(arg y_pos5) -z $(arg z_pos5) -Y $(arg yaw_5) -param robot_description" />
   </group>
 
 
@@ -113,7 +113,7 @@
       <param name="tf_prefix" value="$(arg sixth_tb3)" />
     </node>
     
-    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg sixth_tb3) -x $(arg x_pos4) -y $(arg y_pos4) -z $(arg z_pos4) -Y $(arg yaw_4) -param robot_description" />
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg sixth_tb3) -x $(arg x_pos6) -y $(arg y_pos6) -z $(arg z_pos6) -Y $(arg yaw_6) -param robot_description" />
   </group>
 </launch>
 
