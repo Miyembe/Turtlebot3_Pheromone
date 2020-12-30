@@ -8,15 +8,15 @@
   <arg name="fifth_tb3" default="tb3_4" />
   <arg name="sixth_tb3" default="tb3_5" />
 
-  <arg name="x_pos1" default="-3.0"/>
+  <arg name="x_pos1" default="3.0"/>
   <arg name="y_pos1" default="0.0"/>
   <arg name="z_pos1" default="0.0"/>
-  <arg name="yaw_1"  default="0.0"/>
+  <arg name="yaw_1"  default="3.14"/>
 
-  <arg name="x_pos2" default="3.0"/>
+  <arg name="x_pos2" default="-3.0"/>
   <arg name="y_pos2" default="0.0"/>
   <arg name="z_pos2" default="0.0"/>
-  <arg name="yaw_2"  default="3.14"/>
+  <arg name="yaw_2"  default="0.0"/>
 
   <arg name="x_pos3" default="3.0"/>
   <arg name="y_pos3" default="-2.5"/>
@@ -40,7 +40,7 @@
 
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find turtlebot3_pheromone)/worlds/tcds_exp4.world"/>
+    <arg name="world_name" value="$(find turtlebot3_pheromone)/worlds/tcds_exp4_v2.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
