@@ -312,7 +312,7 @@ class Env:
         # 20201010 How can I make the action input results in the change in state?
         # I read tensorswarm, and it takes request and go one step.
         # It waited until m_loop_done is True - at the end of the post step.
-        
+        print("Actions: {}".format(actions))
         # 0. Initiliasation
         start_time = time.time()
         record_time = start_time
@@ -320,17 +320,26 @@ class Env:
         
         #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        twists_rsc = [Twist()]*self.num_robots
-
+        #twists_rsc = [Twist()]*self.num_robots
+        #print("twists: {}".format(twists))
         # rescaling the action
         for i in range(len(twists)):
-            twists_rsc[i].linear.x = 0.5 * (twists[i].linear.x + 1) # only forward motion
-            twists_rsc[i].angular.z = twists[i].angular.z
+            twists[i].linear.x = 0.5 * (twists[i].linear.x + 1) # only forward motion
+            twists[i].angular.z = twists[i].angular.z
+        #print("twists UP: {}".format(twists))
+        
+        #print("twists: {}".format(twists))
+        #print("twists_rsc: {}".format(twists_rsc))
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        linear_x_rsc = [i.linear.x for i in twists_rsc]
-        angular_z_rsc = [i.angular.z for i in twists_rsc]
+        #print("len twists: {}".format(len(twists)))
+        #print("len twists_rsc: {}".format(len(twists_rsc)))
+        #linear_x_rsc = [i.linear.x for i in twists_rsc]
+        #angular_z_rsc = [i.angular.z for i in twists_rsc]
         dones = self.dones
+        #print("Linear: {}, Angular: {}".format(linear_x, angular_z))
+        #print("Linear_rsc: {}, Angular_rsc: {}".format(linear_x_rsc, angular_z_rsc))
+        
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -341,10 +350,10 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            self.pub_tb3_0.publish(twists_rsc[0])
-            self.pub_tb3_1.publish(twists_rsc[1])
-            self.pub_tb3_2.publish(twists_rsc[2])
-            self.pub_tb3_3.publish(twists_rsc[3])
+            self.pub_tb3_0.publish(twists[0])
+            self.pub_tb3_1.publish(twists[1])
+            self.pub_tb3_2.publish(twists[2])
+            self.pub_tb3_3.publish(twists[3])
 
             self.rate.sleep()
             record_time = time.time()
@@ -413,7 +422,7 @@ class Env:
         for i in range(self.num_robots):
             if abs(goal_progress[i]) < 0.1:
                 if goal_progress[i] >= 0:
-                        distance_rewards[i] = goal_progress[i]
+                        distance_rewards[i] = goal_progress[i] * 1.2
                 else:
                         distance_rewards[i] = goal_progress[i]
             else:
@@ -443,15 +452,15 @@ class Env:
 
         ## 6.4. Angular speed penalty
         for i in range(self.num_robots):
-            if abs(angular_z_rsc[i])>0.8:
+            if abs(angular_z[i])>0.8:
                 angular_punish_rewards[i] = -1
                 if dones[i] == True:
                     angular_punish_rewards[i] = 0.0
         
         ## 6.5. Linear speed penalty
         for i in range(self.num_robots):
-            if linear_x_rsc[i] < 0.2:
-                linear_punish_rewards[i] = -0.0
+            if linear_x[i] < 0.2:
+                linear_punish_rewards[i] = -1.0
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0
@@ -541,7 +550,7 @@ class Env:
         #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
-        print("Linear: {}, Angular: {}".format(linear_x_rsc, angular_z_rsc))
+        print("Linear: {}, Angular: {}".format(linear_x, angular_z))
         print("Reward: {}".format(rewards))
         print("Time diff: {}".format(test_time-test_time2))
         

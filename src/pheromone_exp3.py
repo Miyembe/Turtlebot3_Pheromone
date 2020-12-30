@@ -134,7 +134,7 @@ class Node():
         # ori = pose.orientation
         #print("pos0x: {}".format(pos[0].x))
         phero = self.pheromone
-        print("pos: {}".format(pos))
+    
         x = [p.x for p in pos]
         y = [p.y for p in pos]
         # for i in range(self.num_robots):
@@ -209,7 +209,7 @@ class Node():
                     phero_val[n][j+3*i] += static_phero.getPhero(x_idx[n]+i-1, y_idx[n]+j-1)
                     phero_val[n][j+3*i] = min(self.phero_max, max(self.phero_min, phero_val[n][j+3*i]))
             phero_arr[n].data = phero_val[n]
-        print("phero_val: {}".format(phero_val))
+        #print("phero_val: {}".format(phero_val))
         # Clipping pheromone value
 
         # Return pheromone value to each robot
@@ -225,7 +225,7 @@ class Node():
         if self.is_phero_inj is True:
             for i, phero_dy in enumerate(self.pheromone):
                 if '%d'%i in phero_dy.name:
-                    phero_dy.gradInjection(x_idx[i], y_idx[i], 1, 0.3, 1.0, self.phero_max)
+                    phero_dy.gradInjection(x_idx[i], y_idx[i], 0.5, 0.1, 0.8, self.phero_max)
 
         # ========================================================================= #
 	    #                           Pheromone Update                                #
@@ -282,10 +282,10 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                for i in range(self.num_robots):  # Reset the pheromone grid
+                for i in range(len(self.pheromone)):  # Reset the pheromone grid
                     self.pheromone[i].reset()
                     if 'static' in self.pheromone[i].name:
-                        self.pheromone.load("tcds_exp3") # you can load any types of pheromone grid
+                        self.pheromone[i].load('tcds_exp3') # you can load any types of pheromone grid
                 print("Pheromone grid reset!")
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
@@ -432,7 +432,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheormone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

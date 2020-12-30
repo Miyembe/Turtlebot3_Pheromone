@@ -16,9 +16,9 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
+from turtlebot3_pheromone.msg import fma
 
 import time
 import tensorflow
@@ -265,7 +265,7 @@ class Env:
 
         # Rescale and clipping the actions
         t.linear.x = action[0]*0.26
-        t.linear.x = min(1, max(-1, t.linear.x))
+        t.linear.x = min(pi/2, max(-pi/2, t.linear.x))
         
         t.angular.z = action[1]
         return t
@@ -338,16 +338,14 @@ class Env:
         
         #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        twists_rsc = [Twist()]*self.num_robots
+        #twists_rsc = [Twist()]*self.num_robots
 
         # rescaling the action
         for i in range(len(twists)):
-            twists_rsc[i].linear.x = 0.5 * (twists[i].linear.x + 1) # only forward motion
-            twists_rsc[i].angular.z = twists[i].angular.z
+            twists[i].linear.x = twists[i].linear.x # only forward motion
+            twists[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        linear_x_rsc = [i.linear.x for i in twists_rsc]
-        angular_z_rsc = [i.angular.z for i in twists_rsc]
         dones = self.dones
         
         # position of turtlebot before taking steps
@@ -359,8 +357,8 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            self.pub_tb3_0.publish(twists_rsc[0])
-            self.pub_tb3_1.publish(twists_rsc[1])
+            self.pub_tb3_0.publish(twists[0])
+            self.pub_tb3_1.publish(twists[1])
 
             self.rate.sleep()
             record_time = time.time()
@@ -431,8 +429,8 @@ class Env:
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.3 and dones[i] == False:
-                goal_rewards[i] = 50.0
+            if distance_to_goals[i] <= 0.5 and dones[i] == False:
+                goal_rewards[i] = 100.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
 
@@ -441,15 +439,15 @@ class Env:
 
         ## 5.4. Angular speed penalty
         for i in range(self.num_robots):
-            if abs(angular_z_rsc[i])>0.8:
+            if abs(angular_z[i])>0.8:
                 angular_punish_rewards[i] = -1
                 if dones[i] == True:
                     angular_punish_rewards[i] = 0.0
         
         ## 5.5. Linear speed penalty
         for i in range(self.num_robots):
-            if linear_x_rsc[i] < 0.2:
-                linear_punish_rewards[i] = -2
+            if linear_x[i] < 0.2:
+                linear_punish_rewards[i] = -1
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0
@@ -458,7 +456,7 @@ class Env:
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2)
         collision_rewards = [0.0]*self.num_robots
-        if distance_btw_robots <= 0.3 and dones[i] == False:
+        if distance_btw_robots <= 0.32 and dones[i] == False:
             print("Collision!")
             for i in range(self.num_robots):
                 collision_rewards[i] = -30.0
@@ -513,7 +511,7 @@ class Env:
         #print("Collision R1: {}, R2: {}".format(collision_rewards[0], collision_rewards[1]))
         #print("Angular R: {}".format(angular_punish_reward))
         #print("Linear R: {}".format(linear_punish_reward))
-        print("Linear: {}, Angular: {}".format(linear_x_rsc, angular_z_rsc))
+        print("Linear: {}, Angular: {}".format(linear_x, angular_z))
         print("Reward: {}".format(rewards))
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), states, rewards, dones, infos
