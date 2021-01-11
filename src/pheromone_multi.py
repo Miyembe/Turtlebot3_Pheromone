@@ -86,11 +86,12 @@ class Node():
         for i in range(len(phero)):
             res = phero[i].resolution
             round_dp = int(log10(res))
+            x_tmp[i] = x_tmp[i]*2+1/res 
+            y_tmp[i] = y_tmp[i]*2+1/res
             x_tmp[i] = round(x_tmp[i], round_dp) # round the position value so that they fit into the centre of the cell.
             y_tmp[i] = round(y_tmp[i], round_dp) # e.g. 0.13 -> 0.1
-            x_tmp[i] = int(x_tmp[i]*res)
-            y_tmp[i] = int(y_tmp[i]*res)
-        
+            x_tmp[i] = int(x_tmp[i]*(10**round_dp))
+            y_tmp[i] = int(y_tmp[i]*(10**round_dp))
             # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
             x_index[i] = x_tmp[i] + (phero[i].num_cell-1)/2
             y_index[i] = y_tmp[i] + (phero[i].num_cell-1)/2
@@ -357,7 +358,7 @@ class Pheromone():
 
     def __init__(self, name, evaporation, diffusion):
         self.name = name
-        self.resolution = 10 # grid cell size = 1 m / resolution
+        self.resolution = 20 # grid cell size = 1 m / resolution
         self.size = 12 # m
         self.num_cell = self.resolution * self.size + 1
         if self.num_cell % 2 == 0:

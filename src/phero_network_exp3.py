@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 14
+        self.num_obs = 23
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 1024, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 1024, activation=tf.nn.relu)
         net = tf.layers.dense(net, 512, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
