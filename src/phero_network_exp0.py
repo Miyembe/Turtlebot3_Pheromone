@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo_exp
+import phero_turtlebot_exp0
 import numpy as np
 import os
 import sys
@@ -41,8 +41,7 @@ class AbstractEnvRunner(object):
         self.env = env
         self.model = model
         nenv = 1
-        _, self.obs = env.reset()
-        print("self.obs: {}".format(self.obs))
+        self.obs = env.reset()
         self.nsteps = nsteps
         self.states = model.initial_state
         self.dones = [False for _ in range(nenv)]
@@ -61,7 +60,7 @@ class PheroTurtlebotPolicy(object):
         self.pdtype = make_pdtype(ac_space)
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 14), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 6), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -317,7 +316,8 @@ class Runner(AbstractEnvRunner):
         super(Runner, self).__init__(env=env, model=model, nsteps=nsteps)
         self.lam = lam
         self.gamma = gamma
-        #self.ids, self.obs = self.env.reset()
+        self.ids, self.obs = self.env.reset()
+        self.reset_counter = 0
         #self.env.set_model(self.model)
 
     def sf01(self, arr):
@@ -332,7 +332,11 @@ class Runner(AbstractEnvRunner):
         mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
-        self.ids, self.obs = self.env.reset()
+        if self.reset_counter > 1:   
+            self.ids, self.obs = self.env.reset()
+            self.reset_counter = 0 
+        else:
+            self.reset_counter += 1
         self.obs = np.asarray(self.obs).reshape(1, self.env.state_num)
         self.dones = [False] * self.env.num_robots
         for _ in range(self.nsteps):
@@ -378,18 +382,6 @@ class Runner(AbstractEnvRunner):
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
                 mb_states, epinfos
 
-    def exprun(self):
-        '''
-        Function for running experiments.
-        - Repeats until experiments are finished (get sign from the environment)
-        '''
-
-        isExpDone = False
-        while isExpDone == False:
-            #print self.obs
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
-            self.ids, self.obs, rewards, self.dones, infos = self.env.step(0.1, actions[0][0], actions[0][1])
-
 class PPO:
     '''
     The main PPO class. The whole PPO algorithm is executed in 'learn' function
@@ -431,7 +423,7 @@ class PPO:
     def learn(self):
         # For logging
         time_str = time.strftime("%Y%m%d-%H%M%S")
-        logger_ins = logger.Logger('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+        logger_ins = logger.Logger('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
         # reassigning the members of class into this function for simplicity
@@ -593,48 +585,18 @@ class PPO:
         self.env.close()
         return model
 
-
-    def exprun(self):
-
-        ob_space = self.env.observation_space
-        ac_space = self.env.action_space
-        nenvs =  1
-        nbatch = nenvs * self.nsteps
-        nminibatches = self.nminibatches
-        nbatch_train = nbatch // nminibatches
-        noptepochs = self.noptepochs
-        nsteps = self.nsteps
-        save_interval = self.save_interval
-        log_interval = self.log_interval
-        restore_path = self.restore_path
-        gamma = self.gamma
-        lam = self.lam
-        lr = self.lr
-        cliprange = self.cliprange
-        deterministic = self.deterministic
-        
-        make_model = lambda : Model(policy=self.policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
-                                    nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
-                                    max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
-        model = make_model()                            
-        model.restore("/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/20210113-220842forexp1/03300r4.38")
-
-        runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
-        runner.exprun()
-
-
     def safemean(self, xs):
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_repellent_ppo_exp.Env()
-    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=256, nminibatches=4, lam=0.95, gamma=0.99,
+    env = phero_turtlebot_exp0.Env()
+    PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,
                 total_timesteps=5000000,
                 deterministic=False)
-    PPO_a.exprun()
+    PPO_a.learn()
 
 if __name__ == '__main__':
     main()

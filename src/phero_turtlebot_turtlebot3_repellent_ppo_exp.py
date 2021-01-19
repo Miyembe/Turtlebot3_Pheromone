@@ -14,7 +14,7 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 
 import time
 import csv
@@ -87,7 +87,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 14 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -252,7 +252,7 @@ class Env:
         ################################### Logging #########################################
 
         if self.counter_step == 0:
-            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
 
@@ -274,7 +274,7 @@ class Env:
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
-            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
                 print("Successfully Logged.")
@@ -357,6 +357,7 @@ class Env:
         state = self.phero_ig.get_msg()
         phero_vals = state.data
         state_arr = np.asarray(phero_vals)
+        state_arr = np.append(state_arr, np.asarray(theta))
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
@@ -404,7 +405,7 @@ class Env:
         obs_pos = [[2, 0],[-2,0],[0,2],[0,-2]]
         dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
         for i in range(len(obs_pos)):
-            if dist_obs[i] < 0.3:
+            if dist_obs[i] < 0.25:
                 self.is_collided = True
                 self.done = True
                 time.sleep(0.5)

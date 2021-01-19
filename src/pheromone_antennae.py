@@ -126,6 +126,21 @@ class Node():
         Pheromone Value Reading
         '''
 
+        '''2 pheromone values'''
+        # Add two wheel position
+        # wheel_distance = 0.2
+        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        
+        # x_index, y_index = self.posToIndex(pos.x, pos.y)
+        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
+        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
+
+        # # Assign pheromone values from two positions and publish it
+        # phero_val = Float32MultiArray()
+        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
+        # self.pub_phero.publish(phero_val)
+
         ''' 2 values from the antennae'''
         x_index, y_index = self.posToIndex(x, y)
         theta = self.theta
@@ -144,8 +159,9 @@ class Node():
         print("phero_val: {}".format(phero_val.data))
         self.pub_phero.publish(phero_val)
 
+
         '''9 pheromone values'''
-        # Position of 9 cells surrounding the robot
+        # # Position of 9 cells surrounding the robot
         # x_index, y_index = self.posToIndex(x, y)
         # phero_val = Float32MultiArray()
         # #phero_arr = np.array( )
@@ -212,7 +228,7 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
+                self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
