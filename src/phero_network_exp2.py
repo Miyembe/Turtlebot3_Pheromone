@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo_multi
+import phero_turtlebot_exp2
 import numpy as np
 import os
 import sys
@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 13
+        self.num_obs = 6
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 128, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -592,7 +592,7 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_repellent_ppo_multi.Env()
+    env = phero_turtlebot_exp2.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
