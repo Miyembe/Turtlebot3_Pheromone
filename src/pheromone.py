@@ -3,8 +3,8 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
-import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
+sys.path.append('/home/swn/catkin_ws/src/Turtlebot3_Pheromone')
+import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
 import tf
@@ -16,9 +16,9 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
-from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
-from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
+from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 class Node():
 
     def __init__(self, phero):
@@ -126,34 +126,37 @@ class Node():
         Pheromone Value Reading
         '''
 
-        '''2 pheromone values'''
-        # Add two wheel position
-        # wheel_distance = 0.2
-        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        
-        # x_index, y_index = self.posToIndex(pos.x, pos.y)
-        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
-        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
+        ''' 2 values from the antennae'''
+        x_index, y_index = self.posToIndex(x, y)
+        theta = self.theta
+        a_angle = 0.5
+        a_len = 0.45
+        phero_val = Float32MultiArray()
+        antennae_pos_l = [cos(theta)*cos(a_angle)*a_len-sin(theta)*sin(a_angle)*a_len + pos.x, sin(theta)*cos(a_angle)*a_len+cos(theta)*sin(a_angle)*a_len + pos.y] # [cos(0.3)*a_len, sin(0.3)*a_len]
+        antennae_pos_r = [cos(theta)*cos(-a_angle)*a_len-sin(theta)*sin(-a_angle)*a_len + pos.x, sin(theta)*cos(-a_angle)*a_len+cos(theta)*sin(-a_angle)*a_len + pos.y]
+        a_l_index_x, a_l_index_y = self.posToIndex(antennae_pos_l[0], antennae_pos_l[1])
+        a_r_index_x, a_r_index_y = self.posToIndex(antennae_pos_r[0], antennae_pos_r[1])
+        #print("Left Antenna : ({}, {})".format(a_l_index_x, a_l_index_y))
+        #print("Right Antenna : ({}, {})".format(a_r_index_x, a_r_index_y))
 
-        # # Assign pheromone values from two positions and publish it
-        # phero_val = Float32MultiArray()
-        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
-        # self.pub_phero.publish(phero_val)
+        phero_val.data.append(self.pheromone.getPhero(a_l_index_x, a_l_index_y))
+        phero_val.data.append(self.pheromone.getPhero(a_r_index_x, a_r_index_y))
+        print("phero_val: {}".format(phero_val.data))
+        self.pub_phero.publish(phero_val)
 
         '''9 pheromone values'''
         # Position of 9 cells surrounding the robot
-        x_index, y_index = self.posToIndex(x, y)
-        phero_val = Float32MultiArray()
-        #phero_arr = np.array( )
-        for i in range(3):
-            for j in range(3):
-                phero_val.data.append(self.pheromone.getPhero(x_index+i-1, y_index+j-1))
-        #print("phero_avg: {}".format(np.average(np.asarray(phero_val.data))))
-        self.pub_phero.publish(phero_val)
-        # # Assign pheromone value and publish it
-        # phero_val = phero.getPhero(x_index, y_index)
+        # x_index, y_index = self.posToIndex(x, y)
+        # phero_val = Float32MultiArray()
+        # #phero_arr = np.array( )
+        # for i in range(3):
+        #     for j in range(3):
+        #         phero_val.data.append(self.pheromone.getPhero(x_index+i-1, y_index+j-1))
+        # #print("phero_avg: {}".format(np.average(np.asarray(phero_val.data))))
         # self.pub_phero.publish(phero_val)
+        # # # Assign pheromone value and publish it
+        # # phero_val = phero.getPhero(x_index, y_index)
+        # # self.pub_phero.publish(phero_val)
 
         # ========================================================================= #
 	    #                           Pheromone Injection                             #
@@ -370,12 +373,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

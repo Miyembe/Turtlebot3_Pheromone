@@ -96,7 +96,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -228,14 +228,16 @@ class Env:
 
         # rescaling the action
         print("twist: [{}, {}]".format(linear_x, angular_z))
-        linear_x = linear_x*0.4
+        linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
-        linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
-        angular_z_rsc = min(1, max(-1, angular_z*0.6))
+        linear_x = (linear_x+1)*1/2
+        angular_z = min(1, max(-1, angular_z*0.6))
+        
 
-        self.move_cmd.linear.x = linear_x_rsc
-        self.move_cmd.angular.z = angular_z_rsc
-        action = np.array([linear_x_rsc, angular_z_rsc])
+        self.move_cmd.linear.x = linear_x
+        self.move_cmd.angular.z = angular_z
+        action = np.array([linear_x, angular_z])
+        print("action: {}".format(action))
         self.rate.sleep()
         done = False
 
@@ -282,6 +284,7 @@ class Env:
         state = self.phero_ig.get_msg()
         phero_vals = state.data
         state_arr = np.asarray(phero_vals)
+        #state_arr = np.append(state_arr, np.asarray(theta))
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
@@ -306,21 +309,21 @@ class Env:
         phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
     
         ## 5.3. Goal reward
-        if distance_to_goal <= 0.3:
-            goal_reward = 50.0
+        if distance_to_goal <= 0.4:
+            goal_reward = 100.0
             done = True
             self.reset()
             time.sleep(1)
 
         ## 5.4. Angular speed penalty
         angular_punish_reward = 0.0
-        if abs(angular_z_rsc) > 0.8:
-            angular_punish_reward = -1
+        if abs(angular_z) > 0.8:
+            angular_punish_reward = -1.0
         
         ## 5.5. Linear speed penalty
         linear_punish_reward = 0.0
-        if linear_x_rsc < 0.2:
-            linear_punish_reward = -1
+        if linear_x < 0.2:
+            linear_punish_reward = -1.0
         ## 5.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         collision_reward = 0.0
@@ -328,7 +331,7 @@ class Env:
         dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
         for i in range(len(obs_pos)):
             if dist_obs[i] < 0.3:
-                collision_reward = -50
+                collision_reward = -200.0
                 self.reset()
                 time.sleep(0.5)
 
@@ -357,10 +360,10 @@ class Env:
         print("GP: {}".format(goal_progress))
         print("Target: ({}, {})".format(self.target_x, self.target_y))
         print("Distance R: {}".format(distance_reward*(4/time_step)))
-        print("Phero R: {}".format(phero_reward))
-        print("Goal R: {}".format(goal_reward))
-        print("Angular R: {}".format(angular_punish_reward))
-        print("Linear R: {}".format(linear_punish_reward))
+        #print("Phero R: {}".format(phero_reward))
+        #print("Goal R: {}".format(goal_reward))
+        #print("Angular R: {}".format(angular_punish_reward))
+        #print("Linear R: {}".format(linear_punish_reward))
         print("Collision R: {}".format(collision_reward))
         print("Reward: {}".format(reward))
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
