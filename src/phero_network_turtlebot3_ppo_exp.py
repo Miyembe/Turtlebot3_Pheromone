@@ -61,7 +61,7 @@ class PheroTurtlebotPolicy(object):
         self.pdtype = make_pdtype(ac_space)
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 13), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 14), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -581,7 +581,7 @@ class PPO:
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
                 #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
                 step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
-                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
+                sio.savemat('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
@@ -617,7 +617,7 @@ class PPO:
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         model = make_model()                            
-        model.restore("/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/exUsed/experiment3/model_weights/00840r2.39")
+        model.restore("/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/20210113-220842forexp1/03300r4.38")
 
         runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
         runner.exprun()

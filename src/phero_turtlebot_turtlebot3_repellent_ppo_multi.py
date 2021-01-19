@@ -89,6 +89,7 @@ class Env:
         self.pose_info = rospy.Subscriber("/gazebo/model_states", ModelStates, self.pose_ig)
         self.phero_info = rospy.Subscriber("/phero_value", fma, self.phero_ig)
 
+
         
 
         ## tf related lines. Needed for real turtlebot odometry reading.
@@ -129,6 +130,9 @@ class Env:
         self.model_state = ModelStates()
         self.reset_proxy = rospy.ServiceProxy('gazebo/reset_simulation', Empty)
 
+        # Previous pheromone data
+        self.prev_phero = [None] *9
+        self.prev_prev_phero = [None]*9
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
@@ -264,7 +268,7 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.26
+        t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
         t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
@@ -411,7 +415,7 @@ class Env:
             if abs(goal_progress[i]) < 0.1:
                 print("Goal Progress: {}".format(goal_progress))
                 if goal_progress[i] >= 0:
-                        distance_rewards[i] = goal_progress[i] * 1.2
+                        distance_rewards[i] = goal_progress[i]
                 else:
                         distance_rewards[i] = goal_progress[i]
             else:
@@ -440,14 +444,14 @@ class Env:
         ## 5.4. Angular speed penalty
         for i in range(self.num_robots):
             if abs(angular_z[i])>0.8:
-                angular_punish_rewards[i] = -1
+                angular_punish_rewards[i] = 0.0
                 if dones[i] == True:
                     angular_punish_rewards[i] = 0.0
         
-        ## 5.5. Linear speed penalty
+        ## 5.5.  speed penalty
         for i in range(self.num_robots):
             if linear_x[i] < 0.2:
-                linear_punish_rewards[i] = -1
+                linear_punish_rewards[i] = 0.0
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0
