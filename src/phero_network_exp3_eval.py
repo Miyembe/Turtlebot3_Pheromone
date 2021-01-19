@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp3
+import phero_turtlebot_turtlebot3_repellent_ppo_multi_exp
 import numpy as np
 import os
 import sys
@@ -14,7 +14,7 @@ import multiprocessing
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-# import keras.backend as K
+import keras.backend as K
 import tensorflow as tf
 import random
 from collections import deque
@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 14
+        self.num_obs = 13
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 1024, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 1024, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
         net = tf.layers.dense(net, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -368,7 +368,6 @@ class Runner(AbstractEnvRunner):
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
-        # Calculation of GAE
         for i in range(self.env.num_robots):
             lastgaelam = 0
             for t in reversed(range(self.nsteps)):
@@ -387,6 +386,17 @@ class Runner(AbstractEnvRunner):
             mb_returns = mb_advs + mb_values
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
                 mb_states, epinfos, mb_rewards
+    def exprun(self):
+        '''
+        Function for running experiments.
+        - Repeats until experiments are finished (get sign from the environment)
+        '''
+        isExpDone = False
+        while isExpDone == False:
+            #print self.obs
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            self.ids, self.obs, rewards, self.dones, infos, isExpDone = self.env.step(actions, 0.1)
+
 
 class PPO:
     '''
@@ -419,6 +429,7 @@ class PPO:
         self.save_interval = save_interval
         self.restore_path = restore_path
         self.deterministic = deterministic
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
     
     def constfn(self, val):
         def f(_):
@@ -428,7 +439,7 @@ class PPO:
     def learn(self):
         # For logging
         time_str = time.strftime("%Y%m%d-%H%M%S")
-        logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+        logger_ins = logger.Logger('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
         # reassigning the members of class into this function for simplicity
@@ -573,16 +584,12 @@ class PPO:
                 board_logger.flush()
 
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
-                reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
-                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_new])]], axis=0)
-            
-                matlabdir = osp.join(logger_ins.get_dir(), 'MATLAB')
-                if not os.path.isdir(matlabdir):
-                    os.makedirs(matlabdir)
-                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(time_str), {'data':step_reward},True,'5',False,False,'row')
+                #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
+                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
+                sio.savemat('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
-                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
+                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
                     os.makedirs(checkdir)
                 savepath = osp.join(checkdir, '%.5i'%update +"r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])))
@@ -591,19 +598,46 @@ class PPO:
         print("Done with training. Exiting.")
         self.env.close()
         return model
+    def exprun(self):
+
+        ob_space = self.env.observation_space
+        ac_space = self.env.action_space
+        nenvs =  1
+        nbatch = nenvs * self.nsteps
+        nminibatches = self.nminibatches
+        nbatch_train = nbatch // nminibatches
+        noptepochs = self.noptepochs
+        nsteps = self.nsteps
+        save_interval = self.save_interval
+        log_interval = self.log_interval
+        restore_path = self.restore_path
+        gamma = self.gamma
+        lam = self.lam
+        lr = self.lr
+        cliprange = self.cliprange
+        deterministic = self.deterministic
+        
+        make_model = lambda : Model(policy=self.policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
+                                    nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
+                                    max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
+        model = make_model()                            
+        model.restore("/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/exUsed/experiment4/model_weights/03020r2.11")
+
+        runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
+        runner.exprun()
 
     def safemean(self, xs):
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_exp3.Env()
+    env = phero_turtlebot_turtlebot3_repellent_ppo_multi_exp.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,
-                total_timesteps=3000000,
+                total_timesteps=5000000,
                 deterministic=False)
-    PPO_a.learn()
+    PPO_a.exprun()
 
 if __name__ == '__main__':
     main()

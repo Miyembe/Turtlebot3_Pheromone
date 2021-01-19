@@ -1,3 +1,4 @@
+
 #! /usr/bin/env python
 
 import rospy
@@ -6,6 +7,7 @@ import tf
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, Point, Quaternion
+from tf.transformations import quaternion_from_euler
 import math
 from math import *
 
@@ -21,14 +23,15 @@ from turtlebot3_pheromone.msg import fma
 import time
 import tensorflow
 import threading
-#from keras.models import Sequential, Model
-#from keras.layers import Dense, Dropout, Input, merge
-#from keras.layers.merge import Add, Concatenate
-#from keras.optimizers import Adam
-#import keras.backend as K
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Input, merge
+from keras.layers.merge import Add, Concatenate
+from keras.optimizers import Adam
+import keras.backend as K
 import gym
 import numpy as np
 import random
+import csv
 
 import scipy.io as sio
 
@@ -68,10 +71,9 @@ class Env:
         self.phero_ig = InfoGetter()
         #self.collision_ig = InfoGetter()
 
-        self.pub_tb3_0 = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_1 = rospy.Publisher('/tb3_1/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_2 = rospy.Publisher('/tb3_2/cmd_vel', Twist, queue_size=1)
-        self.pub_tb3_3 = rospy.Publisher('/tb3_3/cmd_vel', Twist, queue_size=1)
+        self.pub_tb3 = [None]*self.num_robots
+        for i in range(self.num_robots):
+            self.pub_tb3[i] = rospy.Publisher('/tb3_{}/cmd_vel'.format(i), Twist, queue_size=1)
         self.position = Point() # Do I need this position in this script? or just get pheromone value only?
         self.move_cmd = Twist()
 
@@ -117,6 +119,27 @@ class Env:
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
 
+        # File name
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
+        self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
+        print(self.file_name)
+
+        # Experiments
+        self.isExpDone = False
+   
+        self.counter_step = 0
+        self.counter_collision = 0
+        self.counter_success = 0
+        self.counter_timeout = 0
+        self.arrival_time = []
+        
+        self.is_reset = False
+        self.is_collided = False
+        self.is_goal = 0
+        self.is_timeout = False
+
+        self.reset_timer = time.time()
+
     #To be done when real robots are used
     
     #def get_odom(self):
@@ -125,30 +148,73 @@ class Env:
 
     def reset(self, model_state = None, id_bots = 999):
         
-        self.is_collided = False
-        tb3_0 = -1
-        tb3_1 = -1
-        tb3_2 = -1
-        tb3_3 = -1
+        #self.is_collided = False
+        print("goal value: {}".format(self.is_goal))
+        print("done?: {}".format(self.dones))
+
+        # ID assignment 
+        tb3 = [-1]*self.num_robots
         if model_state is not None:
-            for i in range(len(model_state.name)):
-                if model_state.name[i] == 'tb3_0':
-                    tb3_0 = i
-                if model_state.name[i] == 'tb3_1':
-                    tb3_1 = i
-                if model_state.name[i] == 'tb3_2':
-                    tb3_2 = i
-                if model_state.name[i] == 'tb3_3':
-                    tb3_3 = i
+            for i, name in enumerate(model_state.name):
+                if 'tb3' in name:
+                    tb3[int(name[-1])] = i
+
+        # Increment Collision Counter
+        if self.is_collided == True:
+            print("Collision!")
+            self.counter_collision += 1
+            self.counter_step += 1
+
+        # Increment Arrival Counter and store the arrival time
+        if self.is_goal == 4:
+            print("Arrived goal!")
+            self.counter_success += 1
+            self.counter_step += 1
+            arrived_timer = time.time()
+            art = arrived_timer-self.reset_timer
+            self.arrival_time.append(art)
+            print("Episode time: %0.2f"%art)
+
+        if self.is_timeout == True:
+            self.counter_step += 1
+            self.counter_timeout += 1
+            print("Timeout!")
+
+        # Reset the flags
+        self.is_collided = False
+        self.is_goal = 0
+        self.is_timeout = False
+
+        # Reset position assignment
+        # if id_bots == 3: 
+        #     if self.target_index < self.num_experiments-1:
+        #         self.target_index += 1
+        #     else:
+        #         self.target_index = 0
                 
-        else:
-            tb3_0 = -1
-            tb3_1 = -2
-            tb3_2 = -3
-            tb3_3 = -4
+        # angle_target = self.target_index*2*pi/self.num_experiments        
+
+        # self.x[0] = (self.d_robots/2)*cos(angle_target)
+        # self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        # self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        # self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        # self.theta[0] = angle_target + pi
+        # self.theta[1] = angle_target 
+
+        # quat1 = quaternion_from_euler(0,0,self.theta[0])
+        # quat2 = quaternion_from_euler(0,0,self.theta[1])
+        
+        # self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
+        
+        
+        
+
+
         #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
-        # Reset Turtlebot 1 position
+       # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
         state_msg.pose.position.x = -2.5
@@ -193,6 +259,7 @@ class Env:
         state_msg4.pose.orientation.y = 0
         state_msg4.pose.orientation.z = -0.7071
         state_msg4.pose.orientation.w = 0.7071
+
 
         # Reset Pheromone Grid
         #
@@ -241,8 +308,45 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
+        
         self.dones = [False] * self.num_robots
 
+        ################################### Logging #########################################
+
+        if self.counter_step == 0:
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+
+        if self.counter_step != 0:
+            if (self.counter_collision != 0 or self.counter_success != 0 or self.counter_timeout !=0):
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
+                col_percentage = 100*self.counter_collision/(self.counter_success+self.counter_collision+self.counter_timeout)
+                tout_percentage = 100*self.counter_timeout/(self.counter_success+self.counter_collision+self.counter_timeout)
+            else:
+                succ_percentage = 0
+                col_percentage = 0
+                tout_percentage = 0
+            print("Counter: {}".format(self.counter_step))
+            print("Success: {}, Collision: {}, Timeout: {}".format(self.counter_success, self.counter_collision, self.counter_timeout))
+
+        if (self.counter_step % 10 == 0 and self.counter_step != 0):
+            print("Success Rate: {}%".format(succ_percentage))
+
+        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+            avg_comp = np.average(np.asarray(self.arrival_time))
+            std_comp = np.std(np.asarray(self.arrival_time))
+            print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
+            self.arrival_time = []
+            self.counter_collision = 0
+            self.counter_success = 0
+            self.counter_timeout = 0
+            self.target_index = 0
+        self.reset_timer = time.time()
+        
         return range(0, self.num_robots), initial_state
 
         # When turtlebot is collided with wall, obstacles etc - need to reset
@@ -252,10 +356,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.3
+        t.linear.x = action[0]*0.26
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(pi/2, max(-pi/2, action[1]*0.6))
+        t.angular.z = action[1]
         return t
     
     def posAngle(self, model_state):
@@ -270,11 +374,7 @@ class Env:
                 tb3_0 = i
             if model_state.name[i] == 'tb3_1':
                 tb3_1 = i
-            if model_state.name[i] == 'tb3_2':
-                tb3_2 = i
-            if model_state.name[i] == 'tb3_3':
-                tb3_3 = i
-        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1], model_state.pose[tb3_2], model_state.pose[tb3_3]]
+        tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1]]
         for i in range(self.num_robots):
             # Write relationship between i and the index
             pose[i] = tb3_pose[i] # Need to find the better way to assign index for each robot
@@ -283,7 +383,7 @@ class Env:
             y[i] = pose[i].position.y
             angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
             theta[i] = angles[i][2]
-        idx = [tb3_0, tb3_1, tb3_2, tb3_3]
+        idx = [tb3_0, tb3_1]
         return x, y, theta, idx
 
     def angle0To360(self, angle):
@@ -311,6 +411,7 @@ class Env:
         # 20201010 How can I make the action input results in the change in state?
         # I read tensorswarm, and it takes request and go one step.
         # It waited until m_loop_done is True - at the end of the post step.
+        
         print("Actions: {}".format(actions))
         # 0. Initiliasation
         start_time = time.time()
@@ -323,7 +424,7 @@ class Env:
         #print("twists: {}".format(twists))
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = (twists[i].linear.x+1) * 1/2  # only forward motion
+            twists[i].linear.x = (twists[i].linear.x+0.5) * 2/3 # only forward motion
             twists[i].angular.z = twists[i].angular.z
         #print("twists UP: {}".format(twists))
         
@@ -349,11 +450,11 @@ class Env:
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            self.pub_tb3_0.publish(twists[0])
-            self.pub_tb3_1.publish(twists[1])
-            self.pub_tb3_2.publish(twists[2])
-            self.pub_tb3_3.publish(twists[3])
-
+            for i in range(self.num_robots):
+                if done[i] == False: 
+                    self.pub_tb3[i].publish(twists[i])
+                else:
+                    self.pub_tb3[i].publish(Twist())
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
@@ -443,8 +544,8 @@ class Env:
         for i in range(self.num_robots):
             if distance_to_goals[i] <= 0.5:
                 goal_rewards[i] = 100.0
+                self.is_goal += 1
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
 
             
         
@@ -501,7 +602,6 @@ class Env:
                 if distance_to_goals[i] > 6:
                     ooa_rewards[i] = -30.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
             
         
 
@@ -522,10 +622,9 @@ class Env:
         
         
         ## 7.4. If all the robots are done with tasks, reset
-        # if all(flag == True for flag in dones) == True:
-        #     self.reset(model_state, id_bots=999)
-        #     for i in range(self.num_robots):
-        #         dones[i] = False
+        if all(flag == True for flag in self.dones) == True:
+            # self.is_goal = True
+            self.reset(model_state, id_bots=3)
 
         self.dones = dones
         #print("distance reward: {}".format(distance_reward*(3/time_step)))

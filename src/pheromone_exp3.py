@@ -16,11 +16,11 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
-from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
-from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
+from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
+from turtlebot3_pheromone.msg import fma
 
 class Node():
 
@@ -33,7 +33,7 @@ class Node():
         # Pheromone initialization
         self.pheromone = [None]*self.num_robots
         for i in range(self.num_robots):
-            self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.2, diffusion = 0)
+            self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.5, diffusion = 0)
             self.pheromone[i].isDiffusion = False
         phero_static = Pheromone('static', size = 12, res = 10, evaporation = 180, diffusion = 0)
         phero_static.isDiffusion = False
@@ -424,7 +424,7 @@ class Pheromone():
         '''
         Save the current matrix as a numpy object
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
@@ -432,7 +432,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
