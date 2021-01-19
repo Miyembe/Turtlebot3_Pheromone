@@ -3,8 +3,8 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
-# import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
+# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_pheromone')
+# import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
 import tf
@@ -16,11 +16,11 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
-from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
-from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
+from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
+from turtlebot3_pheromone.msg import fma
 
 class Node():
 
@@ -424,7 +424,7 @@ class Pheromone():
         '''
         Save the current matrix as a numpy object
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
@@ -432,7 +432,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

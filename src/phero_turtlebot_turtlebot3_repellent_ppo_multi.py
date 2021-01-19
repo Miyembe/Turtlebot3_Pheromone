@@ -265,9 +265,9 @@ class Env:
 
         # Rescale and clipping the actions
         t.linear.x = action[0]*0.26
-        t.linear.x = min(pi/2, max(-pi/2, t.linear.x))
+        t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = action[1]
+        t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -342,7 +342,7 @@ class Env:
 
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = twists[i].linear.x # only forward motion
+            twists[i].linear.x = (twists[i].linear.x+1)*1/2 # only forward motion
             twists[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
@@ -459,19 +459,19 @@ class Env:
         if distance_btw_robots <= 0.32 and dones[i] == False:
             print("Collision!")
             for i in range(self.num_robots):
-                collision_rewards[i] = -30.0
+                collision_rewards[i] = -100.0
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
         
         ## 5.7. Time penalty
         #  constant time penalty for faster completion of episode
         for i in range(self.num_robots):
-            time_rewards[i] = -1.0
+            time_rewards[i] = 0.0
             if dones[i] == True:
                 time_rewards[i] = 0.0
         
         ## 5.8. Sum of Rewards
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(4/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
         rewards = np.asarray(rewards).reshape(self.num_robots)
 
         # 6. Reset

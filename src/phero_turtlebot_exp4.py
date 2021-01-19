@@ -61,8 +61,8 @@ class Env:
 
         # Settings
         self.num_robots = 6
-        self.num_cylinders = 3
-        self.num_boxes = 3
+        self.num_cylinders = 9
+        self.num_boxes = 0
         self.num_obstacles = self.num_cylinders + self.num_boxes
 
         # Node initialisation
@@ -284,7 +284,7 @@ class Env:
         t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(1, max(-1, action[1]*0.6))
+        t.angular.z = min(pi/2, max(-pi/2, action[1]))
         return t
     
     def posAngle(self, model_state):
@@ -372,7 +372,7 @@ class Env:
 
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = (2/3)*(twists[i].linear.x + 0.5) # only forward motion
+            twists[i].linear.x = (twists[i].linear.x) # only forward motion
             twists[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
@@ -470,7 +470,7 @@ class Env:
         #     if dones[i] == True:
         #         distance_rewards[i] = 0.0
         
-        self.just_reset == False
+        #self.just_reset == False
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
         #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]

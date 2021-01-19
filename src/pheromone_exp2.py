@@ -92,8 +92,8 @@ class Node():
             y_tmp[i] = int(y_tmp[i]*res)
         
             # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
-            x_index[i] = x_tmp[i] + (phero[i].num_cell-1)/2
-            y_index[i] = y_tmp[i] + (phero[i].num_cell-1)/2
+            x_index[i] = int(x_tmp[i] + (phero[i].num_cell-1)/2)
+            y_index[i] = int(y_tmp[i] + (phero[i].num_cell-1)/2)
             if x_index[i] < 0 or y_index[i] < 0 or x_index[i] > phero[i].num_cell-1 or y_index[i] > phero[i].num_cell-1:
                 raise Exception("The pheromone matrix index is out of range.")
         return x_index, y_index
@@ -126,6 +126,7 @@ class Node():
         x = [pos[0].x, pos[1].x]
         y = [pos[0].y, pos[1].y]
         x_idx, y_idx = self.posToIndex(x, y)
+        
         x = [pos[0].x, pos[1].x]
         y = [pos[0].y, pos[1].y]
         
