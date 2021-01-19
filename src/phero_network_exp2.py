@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo_multi
+import phero_turtlebot_exp2
 import numpy as np
 import os
 import sys
@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 13
+        self.num_obs = 6
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 128, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -334,7 +334,7 @@ class Runner(AbstractEnvRunner):
         mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
-        if self.reset_counter > 1:
+        if self.reset_counter > 0:
             self.ids, self.obs = self.env.reset()
             self.reset_counter = 0
         else: 
@@ -428,7 +428,7 @@ class PPO:
     def learn(self):
         # For logging
         time_str = time.strftime("%Y%m%d-%H%M%S")
-        logger_ins = logger.Logger('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+        logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
         # reassigning the members of class into this function for simplicity
@@ -575,7 +575,7 @@ class PPO:
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
                 #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
                 step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
-                sio.savemat('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
+                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
@@ -592,7 +592,7 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_repellent_ppo_multi.Env()
+    env = phero_turtlebot_exp2.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,

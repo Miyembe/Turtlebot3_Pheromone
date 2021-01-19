@@ -1,15 +1,7 @@
-<<<<<<< HEAD
+
 model_checkpoint_path: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02180r3.32"
 all_model_checkpoint_paths: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02100r1.40"
 all_model_checkpoint_paths: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02120r3.68"
 all_model_checkpoint_paths: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02140r2.53"
 all_model_checkpoint_paths: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02160r2.02"
 all_model_checkpoint_paths: "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/02180r3.32"
-=======
-model_checkpoint_path: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14360r0.92"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14280r0.92"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14300r1.84"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14320r0.32"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14340r0.87"
-all_model_checkpoint_paths: "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/14360r0.92"
->>>>>>> b073b4613948705d1a5e04d78a9d8d7148927d52

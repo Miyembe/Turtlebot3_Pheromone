@@ -323,11 +323,7 @@ class Env:
         #print("twists: {}".format(twists))
         # rescaling the action
         for i in range(len(twists)):
-<<<<<<< HEAD
             twists[i].linear.x = (twists[i].linear.x+1) * 1/2  # only forward motion
-=======
-            twists[i].linear.x = (twists[i].linear.x) # only forward motion
->>>>>>> b073b4613948705d1a5e04d78a9d8d7148927d52
             twists[i].angular.z = twists[i].angular.z
         #print("twists UP: {}".format(twists))
         

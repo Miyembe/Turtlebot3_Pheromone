@@ -3,8 +3,8 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
-# import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
+# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_pheromone')
+# import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
 import tf
