@@ -121,6 +121,7 @@ class Env:
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
+        self.grad_sensitivity = 10
 
     #To be done when real robots are used
     
@@ -248,6 +249,9 @@ class Env:
         y_previous = pose.position.y
         distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
 
+        # Collect previous pheromone data
+        phero_prev = self.phero_ig.get_msg().data
+
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step and done == False):
             self.pub.publish(self.move_cmd)
@@ -280,10 +284,14 @@ class Env:
         if angle_diff > math.pi:
             angle_diff = angle_diff - 2*math.pi
 
-        # 4. Read pheromone (state) from the robot's position 
-        state = self.phero_ig.get_msg()
-        phero_vals = state.data
-        state_arr = np.asarray(phero_vals)
+        # 4. Read pheromone (state) from the robot's position and calculate the gradient
+        phero_now = self.phero_ig.get_msg().data
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
+        
+        print("phero_grad: {}".format(phero_grad))
+        #state = self.phero_ig.get_msg()
+        #phero_vals = state.data
+        state_arr = phero_grad
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)

@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo
+import phero_turtlebot_exp1
 import numpy as np
 import os
 import sys
@@ -60,7 +60,7 @@ class PheroTurtlebotPolicy(object):
         self.pdtype = make_pdtype(ac_space)
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 6), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 8), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -116,9 +116,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 128, activation=tf.nn.relu)
         net = tf.layers.dense(net, 128, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 64, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net

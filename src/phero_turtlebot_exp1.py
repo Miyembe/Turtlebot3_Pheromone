@@ -6,6 +6,7 @@ import tf
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, Point, Quaternion
+from tf.transformations import quaternion_from_euler
 import math
 from math import *
 
@@ -96,7 +97,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -106,7 +107,7 @@ class Env:
         self.target_y = 0.0
         self.target_index = 0
         self.radius = 4
-        self.num_experiments = 20
+        self.num_experiments = 4
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -121,6 +122,9 @@ class Env:
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
+        self.grad_sensitivity = 20
+        self.theta = 0
+        print("werwerq")
 
     #To be done when real robots are used
     
@@ -152,6 +156,9 @@ class Env:
             self.target_index += 1
         else:
             self.target_index = 0
+
+        self.theta = angle_target
+        quat = quaternion_from_euler(0,0,self.theta)
         
 
         # ========================================================================= #
@@ -164,10 +171,10 @@ class Env:
         state_msg.pose.position.x = 0.0
         state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat[0]
+        state_msg.pose.orientation.y = quat[1]
+        state_msg.pose.orientation.z = quat[2]
+        state_msg.pose.orientation.w = quat[3]
 
         # Reset Target Position
         state_target_msg = ModelState()    
@@ -248,6 +255,9 @@ class Env:
         y_previous = pose.position.y
         distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
 
+        # Collect previous pheromone data
+        phero_prev = self.phero_ig.get_msg().data
+
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step and done == False):
             self.pub.publish(self.move_cmd)
@@ -281,10 +291,13 @@ class Env:
             angle_diff = angle_diff - 2*math.pi
 
         # 4. Read pheromone (state) from the robot's position 
-        state = self.phero_ig.get_msg()
-        phero_vals = state.data
-        state_arr = np.asarray(phero_vals)
-        #state_arr = np.append(state_arr, np.asarray(theta))
+
+        phero_now = self.phero_ig.get_msg().data
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
+        
+        print("phero_grad: {}".format(phero_grad))
+        state_arr = phero_grad
+        state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
@@ -331,7 +344,7 @@ class Env:
         dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
         for i in range(len(obs_pos)):
             if dist_obs[i] < 0.3:
-                collision_reward = -200.0
+                collision_reward = -150.0
                 self.reset()
                 time.sleep(0.5)
 

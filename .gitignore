@@ -1,3 +1,4 @@
 # log files etc
-src/log
+src/log/*
 src/pheromone_plot_generation.ipynb
+src/*.pyc
