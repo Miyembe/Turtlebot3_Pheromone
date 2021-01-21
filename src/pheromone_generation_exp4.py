@@ -194,7 +194,7 @@ class Node():
         time_cur_injection = time.time()
         if self.is_phero_inj is True and time_cur_injection - phero.injection_timer >= 0.1:
             for i in range(len(pos_cyls)):
-                phero.injection(x_idx_cyl[i], y_idx_cyl[i], 0.1, 0.4, self.phero_max)
+                phero.gradInjection(x_idx_cyl[i], y_idx_cyl[i], 1.2, 0.3, 0.6, self.phero_max)
             for i in range(len(pos_boxes)):
                 phero.sqInjection(x_idx_box[i], y_idx_box[i], 0.1, 0.8, self.phero_max)
             phero.injection_timer = time_cur_injection
@@ -210,7 +210,7 @@ class Node():
         if time_cur_update-phero.step_timer >= 0.1: 
             phero.update(self.phero_min, self.phero_max)
             print("Ay")
-            print("time: {}".format(time_cur_update-phero.step_timer))
+            #print("time: {}".format(time_cur_update-phero.step_timer))
             phero.step_timer = time_cur_update
         end_time = time.time()
         # ========================================================================= #
@@ -227,7 +227,7 @@ class Node():
         
         
 
-        print("update time: {}".format(end_time - start_time))
+        #print("update time: {}".format(end_time - start_time))
         # Save the pheromone when robot return home.
         # distance_to_origin = sqrt(x**2+y**2)
         # if self.is_saved is False and distance_to_origin < 0.05:
@@ -379,6 +379,16 @@ class Pheromone():
                     self.grid[x+i, y+j] += value
                 if self.grid[x+i, y+j] >= max:
                     self.grid[x+i, y+j] = max
+
+    def gradInjection(self, x, y, value, min_val, rad, maxp):
+        radius = int(rad*self.resolution)
+        #print("Radius: {}".format(radius))
+        for i in range(-radius, radius):
+            for j in range(-radius, radius):
+                if sqrt(i**2+j**2) <= radius and (x+i < self.num_cell-1 and x+i >= 0) and (y+i < self.num_cell-1 and y+i >= 0):
+                    self.grid[x+i, y+j] += value - value*(sqrt(i**2+j**2))/radius + min_val
+                    if self.grid[x+i, y+j] >= maxp:
+                        self.grid[x+i, y+j] = maxp
 
     # Inject pheromone in square shape
     def sqInjection(self, x, y, value, length, max):

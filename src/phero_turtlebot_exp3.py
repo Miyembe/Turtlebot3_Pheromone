@@ -14,18 +14,18 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
+from turtlebot3_pheromone.msg import fma
 
 import time
 import tensorflow
 import threading
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, merge
-from keras.layers.merge import Add, Concatenate
-from keras.optimizers import Adam
-import keras.backend as K
+#from keras.models import Sequential, Model
+#from keras.layers import Dense, Dropout, Input, merge
+#from keras.layers.merge import Add, Concatenate
+#from keras.optimizers import Adam
+#import keras.backend as K
 import gym
 import numpy as np
 import random
@@ -95,7 +95,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 23 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -114,7 +114,6 @@ class Env:
 
         # Miscellanous
         self.ep_len_counter = 0
-        self.dis_rwd_norm = 7
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
 
@@ -324,7 +323,7 @@ class Env:
         #print("twists: {}".format(twists))
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = (twists[i].linear.x) # only forward motion
+            twists[i].linear.x = (twists[i].linear.x+1) * 1/2  # only forward motion
             twists[i].angular.z = twists[i].angular.z
         #print("twists UP: {}".format(twists))
         
@@ -390,9 +389,7 @@ class Env:
 
         
         # Concatenating the state array
-        state_arr = np.asarray(phero_prev)
-        state_arr = np.hstack((state_arr, np.asarray(phero_vals).reshape(self.num_robots, 9)))
-        state_arr = np.hstack((state_arr, np.asarray(theta).reshape(self.num_robots, 1)))
+        state_arr = np.asarray(phero_vals)
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))

@@ -22,6 +22,26 @@ from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
 
+class Antennae():
+    def __init__(self):
+        self.length = 0.45
+        self.tilt_angle = 0.5 # radian
+    def position(self, robot_pos):
+        # robot_pos = [x, y, theta] : pose2D
+        x = robot_pos[0]
+        y = robot_pos[1]
+        theta = robot_pos[2]
+
+        # 1. calculate the position of antennae tips when the angle of the robot is 0.
+        # 2. reflect the angle of the robot (theta) to the positions of the antennae
+        antennae_pos_l = [cos(theta)*cos(self.tilt_angle)*self.length-sin(theta)*sin(self.tilt_angle)*self.length + x, sin(theta)*cos(self.tilt_angle)*self.length+cos(theta)*sin(self.tilt_angle)*self.length + y] # [cos(0.3)*self.length, sin(0.3)*self.length]
+        antennae_pos_r = [cos(theta)*cos(-self.tilt_angle)*self.length-sin(theta)*sin(-self.tilt_angle)*self.length + x, sin(theta)*cos(-self.tilt_angle)*self.length+cos(theta)*sin(-self.tilt_angle)*self.length + y]
+        antennae_pos = [antennae_pos_l, antennae_pos_r]
+
+        return antennae_pos
+
+
+
 class Node():
 
     def __init__(self, phero):
@@ -93,11 +113,12 @@ class Node():
             x_tmp[i] = int(x_tmp[i]*(10**round_dp))
             y_tmp[i] = int(y_tmp[i]*(10**round_dp))
             # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
-            x_index[i] = x_tmp[i] + (phero[i].num_cell-1)/2
-            y_index[i] = y_tmp[i] + (phero[i].num_cell-1)/2
+            x_index[i] = int(x_tmp[i] + (phero[i].num_cell-1)/2)
+            y_index[i] = int(y_tmp[i] + (phero[i].num_cell-1)/2)
             if x_index[i] < 0 or y_index[i] < 0 or x_index[i] > phero[i].num_cell-1 or y_index[i] > phero[i].num_cell-1:
                 raise Exception("The pheromone matrix index is out of range.")
-        return x_index, y_index
+            pos_index = [x_index, y_index]
+        return pos_index
 
     def indexToPos(self, x_index, y_index):
         phero = self.pheromone[0]
@@ -119,14 +140,34 @@ class Node():
             if message.name[i] == 'tb3_1':
                 tb3_1 = i
         # Reading from arguments
-        pos = [message.pose[tb3_0].position, message.pose[tb3_1].position] 
+        
         # twist = message.twist[-[]
         # ori = pose.orientation
         #print("pos0x: {}".format(pos[0].x))
+        tb3_pose = [message.pose[tb3_0], message.pose[tb3_1]]
+        pose = [None]*self.num_robots
+        ori = [None]*self.num_robots
+        x = [None]*self.num_robots
+        y = [None]*self.num_robots
+        angles = [None]*self.num_robots
+        theta = [None]*self.num_robots
+        robot_pose = [None]*self.num_robots
+        for i in range(self.num_robots):
+            # Write relationship between i and the index
+            pose[i] = tb3_pose[i] # Need to find the better way to assign index for each robot
+            ori[i] = pose[i].orientation
+            x[i] = pose[i].position.x
+            y[i] = pose[i].position.y
+            angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
+            theta[i] = angles[i][2]
+            robot_pose[i] = [x[i], y[i], theta[i]]
+        
+
         phero = cargs
-        x = [pos[0].x, pos[1].x]
-        y = [pos[0].y, pos[1].y]
+        # x = [pos[0].x, pos[1].x]
+        # y = [pos[0].y, pos[1].y]
         x_idx, y_idx = self.posToIndex(x, y)
+        pos = [message.pose[tb3_0].position, message.pose[tb3_1].position] 
         x = [pos[0].x, pos[1].x]
         y = [pos[0].y, pos[1].y]
         
@@ -138,20 +179,25 @@ class Node():
         Pheromone Value Reading
         '''
 
-        '''2 pheromone values'''
-        # Add two wheel position
-        # wheel_distance = 0.2
-        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
+        ''' 2 values from the antennae'''
+        robot_antennae = Antennae()
+        antennae_pos = [None]*self.num_robots
+        antennae_idx = [None]*self.num_robots
+        phero_arr = [Float32MultiArray()]*self.num_robots
+        phero_val = [None] * self.num_robots
+        for i in range(self.num_robots):
+            antennae_pos[i] = robot_antennae.position(robot_pose[i])
+            antennae_idx[i] = self.posToIndex(antennae_pos[i][0], antennae_pos[i][1])
+            phero_val[i] = list()   
+            for j in range(2):
+                phero_val[i].append(self.pheromone[1-i].getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]))
+            phero_arr[i].data = phero_val[i]
         
-        # x_index, y_index = self.posToIndex(pos.x, pos.y)
-        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
-        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
+        #print("antennae_idx; {}".format(antennae_idx))
+        #print("shape antennae: {}".format(np.array(antennae_idx).shape))
 
-        # # Assign pheromone values from two positions and publish it
-        # phero_val = Float32MultiArray()
-        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
-        # self.pub_phero.publish(phero_val)
+        print("phero 0: {}, phero 1: {}".format(phero_arr[0].data, phero_arr[1].data))
+        self.pub_phero.publish(phero_arr)
 
         '''9 pheromone values'''
         # Position of 9 cells surrounding the robot
@@ -168,18 +214,18 @@ class Node():
         # self.pub_phero.publish(phero_val)
         
         ''' Read Pheromone from each pheromone grid '''
-        # 9 pheromone value for two robots read from the other's pheromone grid. 
-        phero_arr = [Float32MultiArray()]*self.num_robots
-        phero_val = [None] * self.num_robots
-        #phero_arr = np.array( )
-        for n in range(self.num_robots):
-            phero_val[n] = list()     
-            for i in range(3):
-                for j in range(3):
-                    phero_val[n].append(self.pheromone[1-n].getPhero(x_idx[n]+i-1, y_idx[n]+j-1)) # Read the other's pheromone
-            phero_arr[n].data = phero_val[n]
-        #print("phero1: {}".format(phero_arr[0].data))           
-        self.pub_phero.publish(phero_arr)
+        # # 9 pheromone value for two robots read from the other's pheromone grid. 
+        # phero_arr = [Float32MultiArray()]*self.num_robots
+        # phero_val = [None] * self.num_robots
+        # #phero_arr = np.array( )
+        # for n in range(self.num_robots):
+        #     phero_val[n] = list()     
+        #     for i in range(3):
+        #         for j in range(3):
+        #             phero_val[n].append(self.pheromone[1-n].getPhero(x_idx[n]+i-1, y_idx[n]+j-1)) # Read the other's pheromone
+        #     phero_arr[n].data = phero_val[n]
+        # #print("phero1: {}".format(phero_arr[0].data))           
+        # self.pub_phero.publish(phero_arr)
 
         # ========================================================================= #
 	    #                           Pheromone Injection                             #

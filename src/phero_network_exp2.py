@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp3
+import phero_turtlebot_exp2
 import numpy as np
 import os
 import sys
@@ -14,7 +14,7 @@ import multiprocessing
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-# import keras.backend as K
+import keras.backend as K
 import tensorflow as tf
 import random
 from collections import deque
@@ -334,7 +334,7 @@ class Runner(AbstractEnvRunner):
         mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
-        if self.reset_counter > 1:
+        if self.reset_counter > 0:
             self.ids, self.obs = self.env.reset()
             self.reset_counter = 0
         else: 
@@ -368,7 +368,6 @@ class Runner(AbstractEnvRunner):
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
-        # Calculation of GAE
         for i in range(self.env.num_robots):
             lastgaelam = 0
             for t in reversed(range(self.nsteps)):
@@ -419,6 +418,7 @@ class PPO:
         self.save_interval = save_interval
         self.restore_path = restore_path
         self.deterministic = deterministic
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
     
     def constfn(self, val):
         def f(_):
@@ -573,16 +573,12 @@ class PPO:
                 board_logger.flush()
 
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
-                reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
-                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_new])]], axis=0)
-            
-                matlabdir = osp.join(logger_ins.get_dir(), 'MATLAB')
-                if not os.path.isdir(matlabdir):
-                    os.makedirs(matlabdir)
-                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(time_str), {'data':step_reward},True,'5',False,False,'row')
+                #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
+                step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
+                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
-                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
+                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
                     os.makedirs(checkdir)
                 savepath = osp.join(checkdir, '%.5i'%update +"r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])))
@@ -596,12 +592,12 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_exp3.Env()
+    env = phero_turtlebot_exp2.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
                 cliprange=lambda f: f*0.3,
-                total_timesteps=3000000,
+                total_timesteps=5000000,
                 deterministic=False)
     PPO_a.learn()
 

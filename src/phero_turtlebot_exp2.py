@@ -107,7 +107,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -271,7 +271,7 @@ class Env:
         t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = action[1]
+        t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -346,7 +346,7 @@ class Env:
 
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = (twists[i].linear.x + 0.5)*2/3 # only forward motion
+            twists[i].linear.x = (twists[i].linear.x+1)*1/2 # only forward motion
             twists[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
@@ -390,6 +390,7 @@ class Env:
         # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
         phero_vals = [phero.data for phero in state.values]
+        print("phero_vals: {}".format(phero_vals))
 
         # Concatenating the state array
         state_arr = np.asarray(phero_vals)
@@ -463,7 +464,7 @@ class Env:
         if distance_btw_robots <= 0.32 and dones[i] == False:
             print("Collision!")
             for i in range(self.num_robots):
-                collision_rewards[i] = -30.0
+                collision_rewards[i] = -100.0
                 dones[i] = True
                 #self.reset(model_state, id_bots=3)
         
@@ -475,7 +476,7 @@ class Env:
                 time_rewards[i] = 0.0
         
         ## 5.8. Sum of Rewards
-        rewards = [a*(5/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
+        rewards = [a*(4/time_step)+b+c+d+e+f+g for a, b, c, d, e, f, g in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards)]
         rewards = np.asarray(rewards).reshape(self.num_robots)
 
         # 6. Reset

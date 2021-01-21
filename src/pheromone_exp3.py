@@ -3,8 +3,8 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation')
-# import roslib; roslib.load_manifest('turtlebot3_waypoint_navigation')
+# sys.path.append('/home/swn/catkin_ws/src/turtlebot3_pheromone')
+# import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
 import tf
@@ -16,11 +16,31 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
-from turtlebot3_waypoint_navigation.srv import PheroGoal, PheroGoalResponse
-from turtlebot3_waypoint_navigation.srv import PheroInj, PheroInjResponse
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.srv import PheroRead, PheroReadResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
+from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
+from turtlebot3_pheromone.msg import fma
+
+class Antennae():
+    def __init__(self):
+        self.length = 0.45
+        self.tilt_angle = 0.5 # radian
+    def position(self, robot_pos):
+        # robot_pos = [x, y, theta] : pose2D
+        x = robot_pos[0]
+        y = robot_pos[1]
+        theta = robot_pos[2]
+
+        # 1. calculate the position of antennae tips when the angle of the robot is 0.
+        # 2. reflect the angle of the robot (theta) to the positions of the antennae
+        antennae_pos_l = [cos(theta)*cos(self.tilt_angle)*self.length-sin(theta)*sin(self.tilt_angle)*self.length + x, sin(theta)*cos(self.tilt_angle)*self.length+cos(theta)*sin(self.tilt_angle)*self.length + y] # [cos(0.3)*self.length, sin(0.3)*self.length]
+        antennae_pos_r = [cos(theta)*cos(-self.tilt_angle)*self.length-sin(theta)*sin(-self.tilt_angle)*self.length + x, sin(theta)*cos(-self.tilt_angle)*self.length+cos(theta)*sin(-self.tilt_angle)*self.length + y]
+        antennae_pos = [antennae_pos_l, antennae_pos_r]
+        #print("shape antpos: {}".format(np.array(antennae_pos).shape))
+
+        return antennae_pos
+
 
 class Node():
 
@@ -33,7 +53,7 @@ class Node():
         # Pheromone initialization
         self.pheromone = [None]*self.num_robots
         for i in range(self.num_robots):
-            self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.2, diffusion = 0)
+            self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.5, diffusion = 0)
             self.pheromone[i].isDiffusion = False
         phero_static = Pheromone('static', size = 12, res = 10, evaporation = 180, diffusion = 0)
         phero_static.isDiffusion = False
@@ -90,6 +110,7 @@ class Node():
         phero = self.pheromone
         x_tmp = x
         y_tmp = y
+        #print("x_temp: {}".format(x_tmp))
         # Read pheromone value at the robot position
         x_index = [0]*self.num_robots
         y_index = [0]*self.num_robots
@@ -106,7 +127,31 @@ class Node():
             y_index[i] = int(y_tmp[i] + (phero[i].num_cell-1)/2)
             if x_index[i] < 0 or y_index[i] < 0 or x_index[i] > phero[i].num_cell-1 or y_index[i] > phero[i].num_cell-1:
                 raise Exception("The pheromone matrix index is out of range.")
-        return x_index, y_index
+            pos_index = [x_index, y_index]
+        return pos_index
+
+    def posToIndexSingle(self, x, y):
+        phero = self.pheromone
+        x_tmp = x
+        y_tmp = y
+        #print("x_temp: {}".format(x_tmp))
+        # Read pheromone value at the robot position
+        x_index = [0]*self.num_robots
+        y_index = [0]*self.num_robots
+        res = phero[0].resolution # 20201209 Every pheromone must share same grid size
+        round_dp = int(log10(res))
+        x_tmp = round(x_tmp, round_dp) # round the position value so that they fit into the centre of the cell.
+        y_tmp = round(y_tmp, round_dp) # e.g. 0.13 -> 0.1
+        x_tmp = int(x_tmp*res)
+        y_tmp = int(y_tmp*res)
+    
+        # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
+        x_index = int(x_tmp + (phero[0].num_cell-1)/2)
+        y_index = int(y_tmp + (phero[0].num_cell-1)/2)
+        if x_index < 0 or y_index < 0 or x_index > phero[0].num_cell-1 or y_index > phero[0].num_cell-1:
+            raise Exception("The pheromone matrix index is out of range.")
+        pos_index = [x_index, y_index]
+        return pos_index
 
     def indexToPos(self, x_index, y_index):
         phero = self.pheromone[0]
@@ -129,14 +174,26 @@ class Node():
                 tb3_3 = i
 
         # Reading from arguments
-        pos = [message.pose[tb3_0].position, message.pose[tb3_1].position, message.pose[tb3_2].position, message.pose[tb3_3].position]
-        # twist = message.twist[-[]
-        # ori = pose.orientation
-        #print("pos0x: {}".format(pos[0].x))
+        pose = [message.pose[tb3_0], message.pose[tb3_1], message.pose[tb3_2], message.pose[tb3_3]]
+        
+        ori = [None]*self.num_robots
+        x = [None]*self.num_robots
+        y = [None]*self.num_robots
+        angles = [None]*self.num_robots
+        theta = [None]*self.num_robots
+        robot_pose = [None]*self.num_robots
+        for i in range(self.num_robots):
+            # Write relationship between i and the index
+            ori[i] = pose[i].orientation
+            x[i] = pose[i].position.x
+            y[i] = pose[i].position.y
+            angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
+            theta[i] = angles[i][2]
+            robot_pose[i] = [x[i], y[i], theta[i]]
+        
+        
         phero = self.pheromone
-    
-        x = [p.x for p in pos]
-        y = [p.y for p in pos]
+
         # for i in range(self.num_robots):
         #     x.append(pos[i][0])
         #     y.append(pos[i][1])
@@ -152,69 +209,76 @@ class Node():
         Pheromone Value Reading
         '''
 
-        '''2 pheromone values'''
-        # Add two wheel position
-        # wheel_distance = 0.2
-        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        
-        # x_index, y_index = self.posToIndex(pos.x, pos.y)
-        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
-        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
-
-        # # Assign pheromone values from two positions and publish it
-        # phero_val = Float32MultiArray()
-        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
-        # self.pub_phero.publish(phero_val)
-
-        '''9 pheromone values'''
-        # Position of 9 cells surrounding the robot
-        # x_index, y_index = self.posToIndex(x, y)
-        # phero_val = Float32MultiArray()
-        # #phero_arr = np.array( )
-        # for i in range(3):
-        #     for j in range(3):
-        #         phero_val.data.append(self.pheromone[0].getPhero(x_index+i-1, y_index+j-1)) # TODO: Randomly select the cell if the values are equal
-        #print("phero_avg: {}".format(np.average(np.asarray(phero_val.data))))
-        # self.pub_phero.publish(phero_val)
-        # # Assign pheromone value and publish it
-        # phero_val = phero.getPhero(x_index, y_index)
-        # self.pub_phero.publish(phero_val)
-        
-        ''' Read Pheromone from each pheromone grid '''
-        # each robot reads (1) static pheromone value and (2) the sum of dynamic pheromone of other robots
+        ''' 2 values from the antennae'''
+        robot_antennae = Antennae()
+        antennae_pos = [None]*self.num_robots
+        antennae_idx = [None]*self.num_robots
         phero_arr = [Float32MultiArray()]*self.num_robots
         phero_val = [None] * self.num_robots
-        #phero_arr = np.array( )
 
-        # Dynamic pheromone
-        for n in range(self.num_robots):
-            phero_val[n] = list()     
-            for i in range(3):
-                for j in range(3):
-                    phero_sum = sum([phero_dy.getPhero(x_idx[n]+i-1, y_idx[n]+j-1) for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%n not in phero_dy.name)])
-                    phero_name = []
-                    phero_val[n].append(phero_sum) # Read the sum of other robots pheromone
+        static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name][0]
+
+        for i in range(self.num_robots):
+            antennae_pos[i] = np.array(robot_antennae.position(robot_pose[i]))
+            #print("antennae_pos shape: {}".format(antennae_pos[i]))
+            #print("antennae_pos shape: {}".format(antennae_pos[i].shape))
+            #print("antr: {}".format(antennae_pos[i][0][0]))
+            antennae_idx[i] = [self.posToIndexSingle(antennae_pos[i][0][0], antennae_pos[i][0][1]), self.posToIndexSingle(antennae_pos[i][1][0], antennae_pos[i][1][1])]
             
-                    # Check if it works well
-                    # 20201215 clipping must be added
-                    
-                    
+            phero_val[i] = list()   
+            for j in range(2):
+                
+                #phero_val[i].append(self.pheromone[1-i].getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]))
+                # Dynamic Pheromone Reading
+                phero_sum = sum([phero_dy.getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]) for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%i not in phero_dy.name)])
+                phero_name = []
+                phero_val[i].append(phero_sum) 
 
-        # Static pheromone
-        for n in range(self.num_robots):
-            for i in range(3):
-                for j in range(3):
-                    static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name][0]
-                    phero_val[n][j+3*i] += static_phero.getPhero(x_idx[n]+i-1, y_idx[n]+j-1)
-                    phero_val[n][j+3*i] = min(self.phero_max, max(self.phero_min, phero_val[n][j+3*i]))
-            phero_arr[n].data = phero_val[n]
-        #print("phero_val: {}".format(phero_val))
-        # Clipping pheromone value
+                # Static Pheromone Reading
+                phero_val[i][j] += static_phero.getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1])
+                phero_val[i][j] = min(self.phero_max, max(self.phero_min, phero_val[i][j]))
+            phero_arr[i].data = phero_val[i]
+        #print("antennae_pos shape: {}".format(np.array(antennae_pos).shape))
+        #print("antennae_idx; {}".format(antennae_idx))
+        #print("shape antennae: {}".format(np.array(antennae_idx).shape))
 
-        # Return pheromone value to each robot
-        #self.sock_receiver.return_to_client(np.asarray(phero_val))
+        print("phero 0: {}, phero 1: {}, phero 2: {}, phero 3: {}".format(phero_arr[0].data, phero_arr[1].data, phero_arr[2].data, phero_arr[3].data))
         self.pub_phero.publish(phero_arr)
+
+        ''' Read Pheromone from each pheromone grid '''
+        # # each robot reads (1) static pheromone value and (2) the sum of dynamic pheromone of other robots
+        # phero_arr = [Float32MultiArray()]*self.num_robots
+        # phero_val = [None] * self.num_robots
+        # #phero_arr = np.array( )
+
+        # # Dynamic pheromone
+        # for n in range(self.num_robots):
+        #     phero_val[n] = list()     
+        #     for i in range(3):
+        #         for j in range(3):
+        #             phero_sum = sum([phero_dy.getPhero(x_idx[n]+i-1, y_idx[n]+j-1) for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%n not in phero_dy.name)])
+        #             phero_name = []
+        #             phero_val[n].append(phero_sum) # Read the sum of other robots pheromone
+            
+        #             # Check if it works well
+        #             # 20201215 clipping must be added
+                    
+                    
+
+        # # Static pheromone
+        # for n in range(self.num_robots):
+        #     for i in range(3):
+        #         for j in range(3):
+        #             static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name][0]
+        #             phero_val[n][j+3*i] += static_phero.getPhero(x_idx[n]+i-1, y_idx[n]+j-1)
+        #             phero_val[n][j+3*i] = min(self.phero_max, max(self.phero_min, phero_val[n][j+3*i]))
+        #     phero_arr[n].data = phero_val[n]
+        # #print("phero_val: {}".format(phero_val))
+        # # Clipping pheromone value
+
+        # # Return pheromone value to each robot
+        # #self.sock_receiver.return_to_client(np.asarray(phero_val))
+        # self.pub_phero.publish(phero_arr)
 
         # ========================================================================= #
 	    #                           Pheromone Injection                             #
@@ -424,7 +488,7 @@ class Pheromone():
         '''
         Save the current matrix as a numpy object
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
@@ -432,7 +496,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
