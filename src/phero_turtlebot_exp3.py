@@ -95,7 +95,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 23 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -389,9 +389,7 @@ class Env:
 
         
         # Concatenating the state array
-        state_arr = np.asarray(phero_prev)
-        state_arr = np.hstack((state_arr, np.asarray(phero_vals).reshape(self.num_robots, 9)))
-        state_arr = np.hstack((state_arr, np.asarray(theta).reshape(self.num_robots, 1)))
+        state_arr = np.asarray(phero_vals)
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))

@@ -197,22 +197,6 @@ class Node():
         #print("shape antennae: {}".format(np.array(antennae_idx).shape))
 
         print("phero 0: {}, phero 1: {}".format(phero_arr[0].data, phero_arr[1].data))
-            
-
-
-        # x_index, y_index = self.posToIndex(x, y)
-        # theta = self.theta
-        # phero_val = Float32MultiArray()
-        
-        # #print("Left Antenna : ({}, {})".format(a_l_index_x, a_l_index_y))
-        # #print("Right Antenna : ({}, {})".format(a_r_index_x, a_r_index_y))
-
-        # phero_val.data.append(self.pheromone.getPhero(a_l_index_x, a_l_index_y))
-        # phero_val.data.append(self.pheromone.getPhero(a_r_index_x, a_r_index_y))
-        # print("phero_val: {}".format(phero_val.data))
-        #print("phero_val: {}, {}".format(phero_val[0].data, phero_val[1].data))
-        #print("antennae_idx: {}".format(antennae_idx))
-        #print("phero_val: {}".format(phero_val))
         self.pub_phero.publish(phero_arr)
 
         '''9 pheromone values'''
