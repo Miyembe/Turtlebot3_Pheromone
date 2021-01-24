@@ -238,7 +238,7 @@ class Env:
         linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
         linear_x = (linear_x+1)*1/2
-        angular_z = min(1, max(-1, angular_z*0.6))
+        angular_z = min(pi/2, max(-pi/2, angular_z*0.6))
         
 
         self.move_cmd.linear.x = linear_x
@@ -330,7 +330,7 @@ class Env:
 
         ## 5.4. Angular speed penalty
         angular_punish_reward = 0.0
-        if abs(angular_z) > 0.8:
+        if abs(angular_z) > 1.2:
             angular_punish_reward = -1.0
         
         ## 5.5. Linear speed penalty
