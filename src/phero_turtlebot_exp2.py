@@ -107,7 +107,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -138,6 +138,7 @@ class Env:
         self.dis_rwd_norm = 7
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
+        self.grad_sensitivity = 20
 
     #To be done when real robots are used
     
@@ -359,6 +360,11 @@ class Env:
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
 
+
+        # Collect previous pheromone data
+        state = self.phero_ig.get_msg()
+        phero_prev = [phero.data for phero in state.values]
+
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
             self.pub_tb3_0.publish(twists[0])
@@ -389,11 +395,16 @@ class Env:
 
         # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
-        phero_vals = [phero.data for phero in state.values]
-        print("phero_vals: {}".format(phero_vals))
+        phero_now = [phero.data for phero in state.values]
+        
+        #print("phero_vals: {}".format(phero_vals))
+
+        #phero_now = self.phero_ig.get_msg().data
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
 
         # Concatenating the state array
-        state_arr = np.asarray(phero_vals)
+        state_arr = np.asarray(phero_grad)
+        state_arr = np.append(state_arr, np.asarray(phero_now).reshape(self.num_robots, 1))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
@@ -427,7 +438,7 @@ class Env:
         self.just_reset == False
         
         ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
-        phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
+        #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
         phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 5.3. Goal reward
