@@ -82,8 +82,8 @@ class Node():
         y = int(y*res)
         
         # Position conversion from Robot into pheromone matrix (0, 0) -> (n+1, n+1) of 2n+1 matrix
-        x_index = x + (phero.num_cell-1)/2
-        y_index = y + (phero.num_cell-1)/2
+        x_index = int(x + (phero.num_cell-1)/2)
+        y_index = int(y + (phero.num_cell-1)/2)
         if x_index < 0 or y_index < 0 or x_index > phero.num_cell-1 or y_index > phero.num_cell-1:
             raise Exception("The pheromone matrix index is out of range.")
         return x_index, y_index
@@ -136,12 +136,12 @@ class Node():
         antennae_pos_r = [cos(theta)*cos(-a_angle)*a_len-sin(theta)*sin(-a_angle)*a_len + pos.x, sin(theta)*cos(-a_angle)*a_len+cos(theta)*sin(-a_angle)*a_len + pos.y]
         a_l_index_x, a_l_index_y = self.posToIndex(antennae_pos_l[0], antennae_pos_l[1])
         a_r_index_x, a_r_index_y = self.posToIndex(antennae_pos_r[0], antennae_pos_r[1])
-        #print("Left Antenna : ({}, {})".format(a_l_index_x, a_l_index_y))
-        #print("Right Antenna : ({}, {})".format(a_r_index_x, a_r_index_y))
+        print("Left Antenna : ({}, {})".format(a_l_index_x, a_l_index_y))
+        print("Right Antenna : ({}, {})".format(a_r_index_x, a_r_index_y))
 
         phero_val.data.append(self.pheromone.getPhero(a_l_index_x, a_l_index_y))
         phero_val.data.append(self.pheromone.getPhero(a_r_index_x, a_r_index_y))
-        print("phero_val: {}".format(phero_val.data))
+        #print("phero_val: {}".format(phero_val.data))
         self.pub_phero.publish(phero_val)
 
         '''9 pheromone values'''
@@ -373,12 +373,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
