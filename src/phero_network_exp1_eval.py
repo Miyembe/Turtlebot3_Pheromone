@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo_exp
+import phero_turtlebot_exp1_eval
 import numpy as np
 import os
 import sys
@@ -117,9 +117,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 128, activation=tf.nn.relu)
         net = tf.layers.dense(net, 128, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 64, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -617,7 +617,7 @@ class PPO:
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         model = make_model()                            
-        model.restore("/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/20210113-220842forexp1/03300r4.38")
+        model.restore("/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/20210125-172044/01300r4.64")
 
         runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
         runner.exprun()
@@ -627,7 +627,7 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_repellent_ppo_exp.Env()
+    env = phero_turtlebot_exp1_eval.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=256, nminibatches=4, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,

@@ -15,6 +15,7 @@ from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from tf.transformations import quaternion_from_euler
 
 import time
 import csv
@@ -112,6 +113,8 @@ class Env:
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
+        self.grad_sensitivity = 20
+        self.theta = 0
 
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -194,6 +197,9 @@ class Env:
             self.target_index += 1
         else:
             self.target_index = 0
+
+        self.theta = angle_target
+        quat = quaternion_from_euler(0,0,self.theta)
         
 
         # Reset Turtlebot position
@@ -202,10 +208,10 @@ class Env:
         state_msg.pose.position.x = 0.0
         state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat[0]
+        state_msg.pose.orientation.y = quat[1]
+        state_msg.pose.orientation.z = quat[2]
+        state_msg.pose.orientation.w = quat[3]
 
         # Reset Target Position
         state_target_msg = ModelState()    
