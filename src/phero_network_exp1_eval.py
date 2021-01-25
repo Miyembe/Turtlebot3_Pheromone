@@ -61,7 +61,7 @@ class PheroTurtlebotPolicy(object):
         self.pdtype = make_pdtype(ac_space)
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, 14), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 8), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
