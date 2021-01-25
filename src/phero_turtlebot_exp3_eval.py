@@ -97,7 +97,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 14 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -118,6 +118,7 @@ class Env:
         self.ep_len_counter = 0
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
+        self.grad_sensitivity = 20
 
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -333,7 +334,7 @@ class Env:
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -448,6 +449,8 @@ class Env:
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
 
+        state_prev = self.phero_ig.get_msg()
+        phero_prev = [phero.data for phero in state_prev.values]
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
             for i in range(self.num_robots):
@@ -488,15 +491,16 @@ class Env:
         # except rospy.ServiceException as e:
         #     print("Service Failed %s"%e)
         #print([wow.data for wow in resp.value])
+        # 4. Read pheromone (state) from the robot's position
+
         state = self.phero_ig.get_msg()
-        phero_vals = [phero.data for phero in state.values]
-        #print("Phero_vals: {}".format(phero_vals))
-        #phero_rev = self.swap2elements([phero.data for phero in resp.value])  # To read each other's pheromone
-        #phero_vals = [phero for phero in phero_rev]
+        phero_now = [phero.data for phero in state.values]
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
+
         
         # Concatenating the state array
-        state_arr = np.asarray(phero_vals)
-        state_arr = np.hstack((state_arr, np.asarray(theta).reshape(self.num_robots, 1)))
+        state_arr = np.asarray(phero_grad)
+        state_arr = np.append(state_arr, np.asarray(phero_now).reshape(self.num_robots, 1))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))

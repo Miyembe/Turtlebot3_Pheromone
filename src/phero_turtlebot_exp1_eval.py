@@ -15,6 +15,7 @@ from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from tf.transformations import quaternion_from_euler
 
 import time
 import csv
@@ -87,7 +88,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 14 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -97,7 +98,7 @@ class Env:
         self.target_y = 0.0
         self.target_index = 0
         self.radius = 4
-        self.num_experiments = 20
+        self.num_experiments = 4
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -112,6 +113,8 @@ class Env:
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
+        self.grad_sensitivity = 20
+        self.theta = 0
 
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -194,6 +197,9 @@ class Env:
             self.target_index += 1
         else:
             self.target_index = 0
+
+        self.theta = angle_target
+        quat = quaternion_from_euler(0,0,self.theta)
         
 
         # Reset Turtlebot position
@@ -202,10 +208,10 @@ class Env:
         state_msg.pose.position.x = 0.0
         state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat[0]
+        state_msg.pose.orientation.y = quat[1]
+        state_msg.pose.orientation.z = quat[2]
+        state_msg.pose.orientation.w = quat[3]
 
         # Reset Target Position
         state_target_msg = ModelState()    
@@ -270,7 +276,7 @@ class Env:
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -303,14 +309,15 @@ class Env:
         record_time_step = 0
 
         # rescaling the action
-        linear_x = linear_x*0.4
+        linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
-        linear_x_rsc = 0.5 * (linear_x + 1) # only forward motion
-        angular_z_rsc = min(1, max(-1, angular_z*0.6))
+        linear_x = (linear_x+1)*1/2
+        angular_z = min(pi/2, max(-pi/2, angular_z*0.6))
+        
 
-        self.move_cmd.linear.x = linear_x_rsc
-        self.move_cmd.angular.z = angular_z_rsc
-        action = np.array([linear_x_rsc, angular_z_rsc])
+        self.move_cmd.linear.x = linear_x
+        self.move_cmd.angular.z = angular_z
+        action = np.array([linear_x, angular_z])
         self.rate.sleep()
         self.done = False
 
@@ -320,6 +327,8 @@ class Env:
         x_previous = pose.position.x
         y_previous = pose.position.y
         distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
+        # Collect previous pheromone data
+        phero_prev = self.phero_ig.get_msg().data
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
             self.pub.publish(self.move_cmd)
@@ -354,10 +363,12 @@ class Env:
             angle_diff = angle_diff - 2*math.pi
 
         # 4. Read pheromone (state) from the robot's position 
-        state = self.phero_ig.get_msg()
-        phero_vals = state.data
-        state_arr = np.asarray(phero_vals)
-        state_arr = np.append(state_arr, np.asarray(theta))
+        phero_now = self.phero_ig.get_msg().data
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
+        
+        print("phero_grad: {}".format(phero_grad))
+        state_arr = phero_grad
+        state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)

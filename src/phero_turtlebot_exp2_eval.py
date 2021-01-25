@@ -96,7 +96,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 13 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -124,6 +124,7 @@ class Env:
         self.dis_rwd_norm = 7
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
+        self.grad_sensitivity = 20
 
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -309,7 +310,7 @@ class Env:
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -332,10 +333,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.26
+        t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = action[1]
+        t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -403,8 +404,6 @@ class Env:
             twists_rsc[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        linear_x_rsc = [i.linear.x for i in twists_rsc]
-        angular_z_rsc = [i.angular.z for i in twists_rsc]
         #print("stepdone: {}".format(self.dones))
         
         # position of turtlebot before taking steps
@@ -413,6 +412,10 @@ class Env:
         distance_to_goals_prv = [None]*self.num_robots
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
+
+        # Collect previous pheromone data
+        state = self.phero_ig.get_msg()
+        phero_prev = [phero.data for phero in state.values]
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
@@ -450,12 +453,14 @@ class Env:
         angle_diff = [a_i - b_i for a_i, b_i in zip(global_angle, theta)]
         angle_diff = self.anglepiTopi(angle_diff)
 
-        # 4. Read pheromone (state) from the robot's position
+         # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
-        phero_vals = [phero.data for phero in state.values]
-        
+        phero_now = [phero.data for phero in state.values]
+        phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
+
         # Concatenating the state array
-        state_arr = np.asarray(phero_vals)
+        state_arr = np.asarray(phero_grad)
+        state_arr = np.append(state_arr, np.asarray(phero_now).reshape(self.num_robots, 1))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
