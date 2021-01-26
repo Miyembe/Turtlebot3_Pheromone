@@ -98,11 +98,22 @@ class WaypointNavigation:
         self.is_timeout = False
 
         # antenna movement related parameters
-        self.beta_const = 1.1
-        self.senstivity = 1.0
+
+        self.b_range = np.arange(0.9, 1.3+self.step_size, self.step_size)
+        self.s_range = np.arange(0.4, 1+self.step_size, self.step_size)
+
+        self.b_size = self.b_range.size
+        self.s_size = self.s_range.size
+
+        self.b_counter = 0
+        self.s_counter = 0
+
+        self.beta_const = self.b_range[0]
+        self.sensitivity = self.s_range[0]
+
+        # Reset related
 
         self.reset_timer = time.time()
-
         self.reset()
 
     # def RandomTwist(self):
@@ -256,8 +267,8 @@ class WaypointNavigation:
         
         avg_phero = np.average(np.asarray(phero))
         beta = self.beta_const - avg_phero
-        s_l = beta - (phero[0] - phero[1])/self.senstivity
-        s_r = beta - (phero[1] - phero[0])/self.senstivity
+        s_l = beta - (phero[0] - phero[1])/self.sensitivity
+        s_r = beta - (phero[1] - phero[0])/self.sensitivity
         twist = Twist()
 
         twist.linear.x = (s_l + s_r)/2
@@ -383,28 +394,29 @@ class WaypointNavigation:
 	    #                                  LOGGING                                  #
 	    # ========================================================================= #
         if self.counter_step == 0:
-            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Bias', 'Vcoef', 'Wcoef', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+                csv_writer.writerow(['Episode', 'Beta_const', 'Sensitivity', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
 
         if self.counter_step != 0:
-            if (self.counter_collision != 0 and self.counter_success != 0):
+            if (self.counter_collision != 0 or self.counter_success != 0):
                 succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
             else:
                 succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
 
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
-            print("BIAS: {}, V_COEF: {}, W_COEF: {}".format(self.BIAS, self.V_COEF, self.W_COEF))
+            print("Beta_const: {}, Sensitivity: {}".format(self.beta_const, self.sensitivity))
             print("Success Rate: {}%".format(succ_percentage))
 
         if (self.counter_step % 20 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
-            with open('/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+            
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.BIAS, '%0.2f'%self.V_COEF, '%0.2f'%self.W_COEF, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.beta_const, '%0.2f'%self.sensitivity, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             
             self.paramUpdate()
             self.arrival_time = []
@@ -427,17 +439,18 @@ class WaypointNavigation:
         Parameter update after the number of experiments for a parameter set finished
         '''
         print("Parameters are updated!")
-        if (self.w_counter < self.w_size-1):
-            self.w_counter += 1
-            self.W_COEF = self.w_range[self.w_counter]
-        elif (self.v_counter < self.v_size-1):
-            self.w_counter = 0
-            self.v_counter += 1
-            self.W_COEF = self.w_range[self.w_counter]
-            self.V_COEF = self.v_range[self.v_counter]
+        if (self.s_counter < self.s_size-1):
+            self.s_counter += 1
+            self.sensitivity = self.s_range[self.s_counter]
+        elif (self.b_counter < self.b_size-1):
+            self.s_counter = 0
+            self.b_counter += 1
+            self.sensitivity = self.s_range[self.s_counter]
+            self.beta_const = self.b_range[self.b_counter]
         else:
             print("Finish Iteration of parameters")
             sys.exit()
+        
 
 
         
