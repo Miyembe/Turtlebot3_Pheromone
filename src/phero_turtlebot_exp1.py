@@ -15,16 +15,16 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 
 import time
 import tensorflow
 import threading
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, merge
-from keras.layers.merge import Add, Concatenate
-from keras.optimizers import Adam
-import keras.backend as K
+# from keras.models import Sequential, Model
+# from keras.layers import Dense, Dropout, Input, merge
+# from keras.layers.merge import Add, Concatenate
+# from keras.optimizers import Adam
+# import keras.backend as K
 import gym
 import numpy as np
 import random
@@ -97,7 +97,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -299,8 +299,8 @@ class Env:
         state_arr = phero_grad
         state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
-        state_arr = np.append(state_arr, linear_x)
-        state_arr = np.append(state_arr, angular_z)
+        #state_arr = np.append(state_arr, linear_x)
+        #state_arr = np.append(state_arr, angular_z)
         state_arr = np.append(state_arr, angle_diff)
         state = state_arr.reshape(1, self.state_num)
 
