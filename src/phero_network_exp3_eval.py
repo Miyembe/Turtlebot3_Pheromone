@@ -58,7 +58,7 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 13
+        self.num_obs = 8
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
             phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
