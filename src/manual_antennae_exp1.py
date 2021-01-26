@@ -10,6 +10,7 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState 
 from geometry_msgs.msg import Twist
 from gazebo_msgs.srv import SetModelState
+from tf.transformations import quaternion_from_euler
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from math import *
 from time import sleep
@@ -33,7 +34,7 @@ class WaypointNavigation:
     def __init__(self):
 
         self.num_robots = 1
-        self.num_experiments = 20
+        self.num_experiments = 4
       
         # Initialise pheromone values
         self.phero = [0.0] * 9
@@ -61,7 +62,7 @@ class WaypointNavigation:
 
         # Initialise parameters
         
-        self.step_size = 0.1
+        self.step_size = 0.05
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
         self.v_range = np.arange(0.2, 1+self.step_size, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
@@ -102,8 +103,18 @@ class WaypointNavigation:
         self.reset_flag = False
 
         # antenna movement related parameters
-        self.beta_const = 1.1
-        self.senstivity = 1.0
+
+        self.b_range = np.arange(0.9, 1.3+self.step_size, self.step_size)
+        self.s_range = np.arange(0.4, 1+self.step_size, self.step_size)
+
+        self.b_size = self.b_range.size
+        self.s_size = self.s_range.size
+
+        self.b_counter = 0
+        self.s_counter = 0
+
+        self.beta_const = self.b_range[0]
+        self.sensitivity = self.s_range[0]
         
     def ReadPhero(self, message):
         phero_data = message.data 
@@ -257,8 +268,8 @@ class WaypointNavigation:
         
         avg_phero = np.average(np.asarray(phero))
         beta = self.beta_const - avg_phero
-        s_l = beta - (phero[0] - phero[1])/self.senstivity
-        s_r = beta - (phero[1] - phero[0])/self.senstivity
+        s_l = beta - (phero[0] - phero[1])*self.sensitivity
+        s_r = beta - (phero[1] - phero[0])*self.sensitivity
         twist = Twist()
 
         twist.linear.x = (s_l + s_r)/2
@@ -301,6 +312,8 @@ class WaypointNavigation:
             self.counter_collision += 1
             self.counter_step += 1
             print("Timeout!")
+
+        print("counter_step: {}, counter_success: {}, counter_collision: {}".format(self.counter_step, self.counter_success, self.counter_collision))
             
         # Reset the flags
         self.is_collided = False
@@ -311,7 +324,7 @@ class WaypointNavigation:
 	    #                                  RESET                                    #
 	    # ========================================================================= #
 
-        angle_target = self.target_index*2*pi/self.num_experiments        
+        angle_target = self.target_index*2*pi/self.num_experiments + 0.01*pi  
 
         self.target_x = self.radius*cos(angle_target)
         self.target_y = self.radius*sin(angle_target)
@@ -323,16 +336,19 @@ class WaypointNavigation:
         
         self.is_collided = False
 
+        self.theta = angle_target
+        quat = quaternion_from_euler(0,0,self.theta)
+
         # Reset Turtlebot position
         state_msg = ModelState()
         state_msg.model_name = 'turtlebot3_waffle_pi'
         state_msg.pose.position.x = 0.0
         state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat[0]
+        state_msg.pose.orientation.y = quat[1]
+        state_msg.pose.orientation.z = quat[2]
+        state_msg.pose.orientation.w = quat[3]
 
         # Reset Target Position
         state_target_msg = ModelState()    
@@ -376,17 +392,17 @@ class WaypointNavigation:
         if self.counter_step == 0:
             with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Bias', 'Vcoef', 'Wcoef', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+                csv_writer.writerow(['Episode', 'Beta_const', 'Sensitivity', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
 
         if self.counter_step != 0:
-            if (self.counter_collision != 0 and self.counter_success != 0):
+            if (self.counter_collision != 0 or self.counter_success != 0):
                 succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
             else:
                 succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
         
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
-            print("BIAS: {}, V_COEF: {}, W_COEF: {}".format(self.BIAS, self.V_COEF, self.W_COEF))
+            print("Beta_const: {}, Sensitivity: {}".format(self.beta_const, self.sensitivity))
             print("Success Rate: {}%".format(succ_percentage))
 
         if (self.counter_step % 20 == 0 and self.counter_step != 0):
@@ -396,7 +412,7 @@ class WaypointNavigation:
             
             with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.BIAS, '%0.2f'%self.V_COEF, '%0.2f'%self.W_COEF, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.beta_const, '%0.2f'%self.sensitivity, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             
             self.paramUpdate()
             self.arrival_time = []
@@ -414,14 +430,14 @@ class WaypointNavigation:
         Parameter update after the number of experiments for a parameter set finished
         '''
         print("Parameters are updated!")
-        if (self.w_counter < self.w_size-1):
-            self.w_counter += 1
-            self.W_COEF = self.w_range[self.w_counter]
-        elif (self.v_counter < self.v_size-1):
-            self.w_counter = 0
-            self.v_counter += 1
-            self.W_COEF = self.w_range[self.w_counter]
-            self.V_COEF = self.v_range[self.v_counter]
+        if (self.s_counter < self.s_size-1):
+            self.s_counter += 1
+            self.sensitivity = self.s_range[self.s_counter]
+        elif (self.b_counter < self.b_size-1):
+            self.s_counter = 0
+            self.b_counter += 1
+            self.sensitivity = self.s_range[self.s_counter]
+            self.beta_const = self.b_range[self.b_counter]
         else:
             print("Finish Iteration of parameters")
             sys.exit()
