@@ -297,7 +297,7 @@ class Env:
         
         print("phero_grad: {}".format(phero_grad))
         state_arr = phero_grad
-        state_arr = np.append(state_arr, np.asarray(phero_now))
+        #state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
         #state_arr = np.append(state_arr, linear_x)
         #state_arr = np.append(state_arr, angular_z)
@@ -319,7 +319,10 @@ class Env:
         
         ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
         #phero_sum = np.sum(phero_vals)
-        phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
+        phero_grad_sum = np.sum(phero_grad)
+        phero_reward_coef = 1
+        phero_reward = -phero_grad_sum * phero_reward_coef
+        #phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
     
         ## 5.3. Goal reward
         if distance_to_goal <= 0.4:
