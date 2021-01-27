@@ -143,6 +143,10 @@ class WaypointNavigation:
         self.beta_const = self.b_range[0]
         self.sensitivity = self.s_range[0]
 
+        # Experiments related
+        self.num_experiments = 20
+        self.d_robots = 5
+
         self.reset()
 
     # def RandomTwist(self):
@@ -413,52 +417,94 @@ class WaypointNavigation:
         # quat2 = quaternion_from_euler(0,0,self.theta[1])
         
         
+        print("counter_step: {}".format(self.counter_step))
+        print("counter_success: {}".format(self.counter_success))
+        print("counter_collision: {}".format(self.counter_collision))
+        print("counter_timeout: {}".format(self.counter_timeout))
 
-        # Reset Turtlebot 1 position
+        # Reset position assignment
+        if self.target_index < self.num_experiments-1:
+            self.target_index += 1
+        else:
+            self.target_index = 0
+                
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.x[0] = (self.d_robots/2)*cos(angle_target)
+        self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        self.x[2] = (self.d_robots/2)*cos(angle_target+pi/2)
+        self.y[2] = (self.d_robots/2)*sin(angle_target+pi/2)
+
+        self.x[3] = (self.d_robots/2)*cos(angle_target+3*pi/2)
+        self.y[3] = (self.d_robots/2)*sin(angle_target+3*pi/2)
+
+        self.theta[0] = angle_target + pi
+        self.theta[1] = angle_target 
+        self.theta[2] = angle_target + 3*pi/2
+        self.theta[3] = angle_target + pi/2
+
+        quat1 = quaternion_from_euler(0,0,self.theta[0])
+        quat2 = quaternion_from_euler(0,0,self.theta[1])
+        quat3 = quaternion_from_euler(0,0,self.theta[2])
+        quat4 = quaternion_from_euler(0,0,self.theta[3])
+        
+        self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]], [self.x[3], self.y[3]], [self.x[2], self.y[2]]]
+        
+        
+        
+
+
+        #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
+        
+       # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = -2.5
-        state_msg.pose.position.y = 0.0 
+        state_msg.pose.position.x = self.x[0]
+        state_msg.pose.position.y = self.y[0]
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat1[0]
+        state_msg.pose.orientation.y = quat1[1]
+        state_msg.pose.orientation.z = quat1[2]
+        state_msg.pose.orientation.w = quat1[3]
 
         # Reset Turtlebot 2 Position
         state_msg2 = ModelState()    
         state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg2.pose.position.x = 2.5
-        state_msg2.pose.position.y = 0.0
+        state_msg2.pose.position.x = self.x[1]
+        state_msg2.pose.position.y = self.y[1]
         state_msg2.pose.position.z = 0.0
-        state_msg2.pose.orientation.x = 0
-        state_msg2.pose.orientation.y = 0
-        state_msg2.pose.orientation.z = -0.2
-        state_msg2.pose.orientation.w = 0
+        state_msg2.pose.orientation.x = quat2[0]
+        state_msg2.pose.orientation.y = quat2[1]
+        state_msg2.pose.orientation.z = quat2[2]
+        state_msg2.pose.orientation.w = quat2[3]
 
         # Reset Turtlebot 3 Position
 
         state_msg3 = ModelState()    
         state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg3.pose.position.x = 0.0
-        state_msg3.pose.position.y = -2.5
+        state_msg3.pose.position.x = self.x[2]
+        state_msg3.pose.position.y = self.y[2]
         state_msg3.pose.position.z = 0.0
-        state_msg3.pose.orientation.x = 0
-        state_msg3.pose.orientation.y = 0
-        state_msg3.pose.orientation.z = 0.7071
-        state_msg3.pose.orientation.w = 0.7071
+        state_msg3.pose.orientation.x = quat3[0]
+        state_msg3.pose.orientation.y = quat3[1]
+        state_msg3.pose.orientation.z = quat3[2]
+        state_msg3.pose.orientation.w = quat3[3]
 
         # Reset Turtlebot 4 Position
 
         state_msg4 = ModelState()    
         state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg4.pose.position.x = 0.0
-        state_msg4.pose.position.y = 2.5
+        state_msg4.pose.position.x = self.x[3]
+        state_msg4.pose.position.y = self.y[3]
         state_msg4.pose.position.z = 0.0
-        state_msg4.pose.orientation.x = 0
-        state_msg4.pose.orientation.y = 0
-        state_msg4.pose.orientation.z = -0.7071
-        state_msg4.pose.orientation.w = 0.7071
+        state_msg4.pose.orientation.x = quat4[0]
+        state_msg4.pose.orientation.y = quat4[1]
+        state_msg4.pose.orientation.z = quat4[2]
+        state_msg4.pose.orientation.w = quat4[3]
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -500,7 +546,7 @@ class WaypointNavigation:
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 or self.counter_success != 0):
-                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
+                succ_percentage = 100*self.counter_success/(self.counter_step)
             else:
                 succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
