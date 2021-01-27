@@ -17,6 +17,7 @@ from std_srvs.srv import Empty
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
+from tf.transformations import quaternion_from_euler
 
 import time
 import tensorflow
@@ -103,6 +104,10 @@ class Env:
         # Previous positions
         self.x_prev = [-2.5, 2.5, 0.0, 0.0]#[0.0, 2.0] # [0.0,4.0]
         self.y_prev = [0.0, 0.0, -2.5, 2.5] #[0.0, -2.0]  # [0.0,0.0]
+        self.x = [0.0]*self.num_robots
+        self.y = [0.0]*self.num_robots
+        self.theta = [0.0]*self.num_robots
+        self.target_index = 0
 
         # Set target position
         self.target = [[2.5, 0.0], [-2.5, 0.0], [0.0, 2.5], [0.0, -2.5]]#[[4.0, 0.0], [2.0, 2.0]] # Two goal (crossing scenario) # [[4.0,0.0], [0.0,0.0]]
@@ -117,6 +122,8 @@ class Env:
         self.just_reset = [False] * self.num_robots
         self.dones = [False] * self.num_robots
         self.grad_sensitivity = 20
+        self.num_experiments = 20
+        self.d_robots = 5
 
     #To be done when real robots are used
     
@@ -147,53 +154,136 @@ class Env:
             tb3_1 = -2
             tb3_2 = -3
             tb3_3 = -4
+        
+        if id_bots == 999: 
+            if self.target_index < self.num_experiments-1:
+                self.target_index += 1
+            else:
+                self.target_index = 0
+                
+        angle_target = self.target_index*2*pi/self.num_experiments        
+
+        self.x[0] = (self.d_robots/2)*cos(angle_target)
+        self.y[0] = (self.d_robots/2)*sin(angle_target)
+
+        self.x[1] = (self.d_robots/2)*cos(angle_target+pi)
+        self.y[1] = (self.d_robots/2)*sin(angle_target+pi)
+
+        self.x[2] = (self.d_robots/2)*cos(angle_target+pi/2)
+        self.y[2] = (self.d_robots/2)*sin(angle_target+pi/2)
+
+        self.x[3] = (self.d_robots/2)*cos(angle_target+3*pi/2)
+        self.y[3] = (self.d_robots/2)*sin(angle_target+3*pi/2)
+
+        self.theta[0] = angle_target + pi
+        self.theta[1] = angle_target 
+        self.theta[2] = angle_target + 3*pi/2
+        self.theta[3] = angle_target + pi/2
+
+        quat1 = quaternion_from_euler(0,0,self.theta[0])
+        quat2 = quaternion_from_euler(0,0,self.theta[1])
+        quat3 = quaternion_from_euler(0,0,self.theta[2])
+        quat4 = quaternion_from_euler(0,0,self.theta[3])
+        
+        self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]], [self.x[3], self.y[3]], [self.x[2], self.y[2]]]
+        
+        
+        
+
+
         #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
-        # Reset Turtlebot 1 position
+       # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
-        state_msg.pose.position.x = -2.5
-        state_msg.pose.position.y = 0.0 
+        state_msg.pose.position.x = self.x[0]
+        state_msg.pose.position.y = self.y[0]
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
+        state_msg.pose.orientation.x = quat1[0]
+        state_msg.pose.orientation.y = quat1[1]
+        state_msg.pose.orientation.z = quat1[2]
+        state_msg.pose.orientation.w = quat1[3]
 
         # Reset Turtlebot 2 Position
         state_msg2 = ModelState()    
         state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg2.pose.position.x = 2.5
-        state_msg2.pose.position.y = 0.0
+        state_msg2.pose.position.x = self.x[1]
+        state_msg2.pose.position.y = self.y[1]
         state_msg2.pose.position.z = 0.0
-        state_msg2.pose.orientation.x = 0
-        state_msg2.pose.orientation.y = 0
-        state_msg2.pose.orientation.z = -0.2
-        state_msg2.pose.orientation.w = 0
+        state_msg2.pose.orientation.x = quat2[0]
+        state_msg2.pose.orientation.y = quat2[1]
+        state_msg2.pose.orientation.z = quat2[2]
+        state_msg2.pose.orientation.w = quat2[3]
 
         # Reset Turtlebot 3 Position
 
         state_msg3 = ModelState()    
         state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg3.pose.position.x = 0.0
-        state_msg3.pose.position.y = -2.5
+        state_msg3.pose.position.x = self.x[2]
+        state_msg3.pose.position.y = self.y[2]
         state_msg3.pose.position.z = 0.0
-        state_msg3.pose.orientation.x = 0
-        state_msg3.pose.orientation.y = 0
-        state_msg3.pose.orientation.z = 0.7071
-        state_msg3.pose.orientation.w = 0.7071
+        state_msg3.pose.orientation.x = quat3[0]
+        state_msg3.pose.orientation.y = quat3[1]
+        state_msg3.pose.orientation.z = quat3[2]
+        state_msg3.pose.orientation.w = quat3[3]
 
         # Reset Turtlebot 4 Position
 
         state_msg4 = ModelState()    
         state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_msg4.pose.position.x = 0.0
-        state_msg4.pose.position.y = 2.5
+        state_msg4.pose.position.x = self.x[3]
+        state_msg4.pose.position.y = self.y[3]
         state_msg4.pose.position.z = 0.0
-        state_msg4.pose.orientation.x = 0
-        state_msg4.pose.orientation.y = 0
-        state_msg4.pose.orientation.z = -0.7071
-        state_msg4.pose.orientation.w = 0.7071
+        state_msg4.pose.orientation.x = quat4[0]
+        state_msg4.pose.orientation.y = quat4[1]
+        state_msg4.pose.orientation.z = quat4[2]
+        state_msg4.pose.orientation.w = quat4[3]
+        
+        # # Reset Turtlebot 1 position
+        # state_msg = ModelState()
+        # state_msg.model_name = 'tb3_0'
+        # state_msg.pose.position.x = -2.5
+        # state_msg.pose.position.y = 0.0 
+        # state_msg.pose.position.z = 0.0
+        # state_msg.pose.orientation.x = 0
+        # state_msg.pose.orientation.y = 0
+        # state_msg.pose.orientation.z = 0
+        # state_msg.pose.orientation.w = 0
+
+        # # Reset Turtlebot 2 Position
+        # state_msg2 = ModelState()    
+        # state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        # state_msg2.pose.position.x = 2.5
+        # state_msg2.pose.position.y = 0.0
+        # state_msg2.pose.position.z = 0.0
+        # state_msg2.pose.orientation.x = 0
+        # state_msg2.pose.orientation.y = 0
+        # state_msg2.pose.orientation.z = -0.2
+        # state_msg2.pose.orientation.w = 0
+
+        # # Reset Turtlebot 3 Position
+
+        # state_msg3 = ModelState()    
+        # state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        # state_msg3.pose.position.x = 0.0
+        # state_msg3.pose.position.y = -2.5
+        # state_msg3.pose.position.z = 0.0
+        # state_msg3.pose.orientation.x = 0
+        # state_msg3.pose.orientation.y = 0
+        # state_msg3.pose.orientation.z = 0.7071
+        # state_msg3.pose.orientation.w = 0.7071
+
+        # # Reset Turtlebot 4 Position
+
+        # state_msg4 = ModelState()    
+        # state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        # state_msg4.pose.position.x = 0.0
+        # state_msg4.pose.position.y = 2.5
+        # state_msg4.pose.position.z = 0.0
+        # state_msg4.pose.orientation.x = 0
+        # state_msg4.pose.orientation.y = 0
+        # state_msg4.pose.orientation.z = -0.7071
+        # state_msg4.pose.orientation.w = 0.7071
 
         # Reset Pheromone Grid
         #
@@ -392,11 +482,14 @@ class Env:
         
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        state_arr = np.append(state_arr, np.asarray(phero_now).reshape(self.num_robots, 1))
+        print("shape_state: {}".format(state_arr.shape))
+        state_arr = np.hstack((state_arr, phero_now))
+        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
+        print("shape_state: {}".format(state_arr.shape))
 
         # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
@@ -519,10 +612,10 @@ class Env:
         
         
         ## 7.4. If all the robots are done with tasks, reset
-        # if all(flag == True for flag in dones) == True:
-        #     self.reset(model_state, id_bots=999)
-        #     for i in range(self.num_robots):
-        #         dones[i] = False
+        if all(flag == True for flag in dones) == True:
+            self.reset(model_state, id_bots=999)
+            for i in range(self.num_robots):
+                dones[i] = False
 
         self.dones = dones
         #print("distance reward: {}".format(distance_reward*(3/time_step)))

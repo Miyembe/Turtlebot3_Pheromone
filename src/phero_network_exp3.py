@@ -419,6 +419,7 @@ class PPO:
         self.save_interval = save_interval
         self.restore_path = restore_path
         self.deterministic = deterministic
+        self.time_str = time.strftime("%Y%m%d-%H%M%S")
     
     def constfn(self, val):
         def f(_):
@@ -582,7 +583,7 @@ class PPO:
                 sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(time_str), {'data':step_reward},True,'5',False,False,'row')
 
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
-                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints')
+                checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
                     os.makedirs(checkdir)
                 savepath = osp.join(checkdir, '%.5i'%update +"r"+"{:.2f}".format(self.safemean([epinfo['r'] for epinfo in epinfobuf])))

@@ -3,7 +3,7 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-sys.path.append('/home/swn/catkin_ws/src/Turtlebot3_Pheromone')
+sys.path.append('/home/sub/catkin_ws/src/Turtlebot3_Pheromone')
 import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np

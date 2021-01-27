@@ -20,11 +20,11 @@ from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 import time
 import tensorflow
 import threading
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, merge
-from keras.layers.merge import Add, Concatenate
-from keras.optimizers import Adam
-import keras.backend as K
+# from keras.models import Sequential, Model
+# from keras.layers import Dense, Dropout, Input, merge
+# from keras.layers.merge import Add, Concatenate
+# from keras.optimizers import Adam
+# import keras.backend as K
 import gym
 import numpy as np
 import random
@@ -299,8 +299,8 @@ class Env:
         state_arr = phero_grad
         #state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
-        state_arr = np.append(state_arr, linear_x)
-        state_arr = np.append(state_arr, angular_z)
+        #state_arr = np.append(state_arr, linear_x)
+        #state_arr = np.append(state_arr, angular_z)
         state_arr = np.append(state_arr, angle_diff)
         state = state_arr.reshape(1, self.state_num)
 
