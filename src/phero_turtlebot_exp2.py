@@ -396,15 +396,15 @@ class Env:
         # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
         phero_now = [phero.data for phero in state.values]
-        
-        #print("phero_vals: {}".format(phero_vals))
 
         #phero_now = self.phero_ig.get_msg().data
         phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
 
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        state_arr = np.append(state_arr, np.asarray(phero_now).reshape(self.num_robots, 1))
+        print("shape_state: {}".format(state_arr.shape))
+        state_arr = np.hstack((state_arr, phero_now))
+        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))

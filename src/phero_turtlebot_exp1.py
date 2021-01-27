@@ -15,7 +15,7 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from std_srvs.srv import Empty
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 
 import time
 import tensorflow
@@ -97,7 +97,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -297,7 +297,7 @@ class Env:
         
         print("phero_grad: {}".format(phero_grad))
         state_arr = phero_grad
-        state_arr = np.append(state_arr, np.asarray(phero_now))
+        #state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
@@ -319,7 +319,10 @@ class Env:
         
         ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
         #phero_sum = np.sum(phero_vals)
-        phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
+        phero_grad_sum = np.sum(phero_grad)
+        phero_reward_coef = 1
+        phero_reward = -phero_grad_sum * phero_reward_coef
+        #phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
     
         ## 5.3. Goal reward
         if distance_to_goal <= 0.4:
