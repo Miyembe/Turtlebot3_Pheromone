@@ -14,7 +14,7 @@ import multiprocessing
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-import keras.backend as K
+# import keras.backend as K
 import tensorflow as tf
 import random
 from collections import deque

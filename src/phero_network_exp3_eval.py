@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_turtlebot3_repellent_ppo_multi_exp
+import phero_turtlebot_exp3_eval
 import numpy as np
 import os
 import sys
@@ -14,7 +14,7 @@ import multiprocessing
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-import keras.backend as K
+#mport keras.backend as K
 import tensorflow as tf
 import random
 from collections import deque
@@ -115,9 +115,9 @@ class PheroTurtlebotPolicy(object):
         Policy Network 
         '''
         # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 512, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 512, activation=tf.nn.relu)
+        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        net = tf.layers.dense(net, 128, activation=tf.nn.relu)
         #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
 
         return net
@@ -621,7 +621,7 @@ class PPO:
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         model = make_model()                            
-        model.restore("/home/swn/catkin_ws/src/turtlebot3_waypoint_navigation/src/log/exUsed/experiment4/model_weights/03020r2.11")
+        model.restore("/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/TVTready/01100r4.65")
 
         runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
         runner.exprun()
@@ -630,7 +630,7 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_turtlebot3_repellent_ppo_multi_exp.Env()
+    env = phero_turtlebot_exp3_eval.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
