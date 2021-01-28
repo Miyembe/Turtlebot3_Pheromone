@@ -156,7 +156,7 @@ class WaypointNavigation:
     #     twist.angular.z = self.MAX_ROTATION_SPEED * (random.random() - 0.5)
     #     print(twist)
     #     return twist
-    def ReadPhero(self, message):
+    def ReadPhero(self, message): 
         phero_data = [phero.data for phero in message.values]
         self.phero = phero_data
         self.phero_sum = [np.sum(np.asarray(phero)) for phero in phero_data]
