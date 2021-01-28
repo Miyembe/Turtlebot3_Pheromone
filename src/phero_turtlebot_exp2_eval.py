@@ -224,7 +224,7 @@ class Env:
         self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
         
         
-        
+        print("target: {}".format(self.target))
 
 
         #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
@@ -310,7 +310,7 @@ class Env:
         if (self.counter_step % 10 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 100 == 0 and self.counter_step != 0):
+        if (self.counter_step % 20 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -336,7 +336,7 @@ class Env:
         t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
+        t.angular.z = min(1, max( -1, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -460,24 +460,24 @@ class Env:
 
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        print("shape_state: {}".format(state_arr.shape))
+        #print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, phero_now))
-        print("shape_state: {}".format(state_arr.shape))
+        #print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
-        print("shape_state: {}".format(state_arr.shape))
+        #print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
 
         # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
-        print("finalshape_state: {}".format(states.shape))
+        #rint("finalshape_state: {}".format(states.shape))
         
         # 6. Reward assignment    
         
         
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.3 and self.dones[i] == False:
+            if distance_to_goals[i] <= 0.6 and self.dones[i] == False:
                 self.is_goal += 1
                 self.dones[i] = True
                 print("goal?")

@@ -272,7 +272,7 @@ class Env:
         t.linear.x = action[0]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(pi/2, max( -pi/2, action[1]*0.6))
+        t.angular.z = min(1, max( -1, action[1]*0.6))
         return t
     
     def posAngle(self, model_state):
@@ -445,7 +445,7 @@ class Env:
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.5 and dones[i] == False:
+            if distance_to_goals[i] <= 0.3 and dones[i] == False:
                 goal_rewards[i] = 100.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
@@ -456,14 +456,14 @@ class Env:
         ## 5.4. Angular speed penalty
         for i in range(self.num_robots):
             if abs(angular_z[i])>0.8:
-                angular_punish_rewards[i] = 0.0
+                angular_punish_rewards[i] = -1.0
                 if dones[i] == True:
                     angular_punish_rewards[i] = 0.0
         
         ## 5.5.  speed penalty
         for i in range(self.num_robots):
             if linear_x[i] < 0.2:
-                linear_punish_rewards[i] = 0.0
+                linear_punish_rewards[i] = -1.0
         for i in range(self.num_robots):
             if dones[i] == True:
                 linear_punish_rewards[i] = 0.0

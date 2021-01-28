@@ -59,11 +59,12 @@ class WaypointNavigation:
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
         self.file_name = "manual_{}_{}".format(self.num_robots, self.time_str)
+        self.traj_name = "{}_traj".format(self.file_name)
         print(self.file_name)
 
         # Initialise parameters
         
-        self.step_size = 0.1
+        self.step_size = 0.05
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
         self.v_range = np.arange(0.2, 0.6, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
@@ -90,6 +91,7 @@ class WaypointNavigation:
         self.counter_step = 0
         self.counter_collision = 0
         self.counter_success = 0
+        self.counter_timeout = 0
         self.arrival_time = []
         
         self.is_reset = False
@@ -99,8 +101,8 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.9, 1.3+self.step_size, self.step_size)
-        self.s_range = np.arange(0.4, 1+self.step_size, self.step_size)
+        self.b_range = np.arange(0.6, 0.85+self.step_size, self.step_size)
+        self.s_range = np.arange(0.4, 1.4+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
         self.s_size = self.s_range.size
@@ -110,6 +112,11 @@ class WaypointNavigation:
 
         self.beta_const = self.b_range[0]
         self.sensitivity = self.s_range[0]
+
+        
+        # Log related
+
+        self.log_timer = time.time()
 
         # Reset related
 
@@ -166,6 +173,14 @@ class WaypointNavigation:
         distance_btw_robots = sqrt((poss[0].x-poss[1].x)**2+(poss[0].y-poss[1].y)**2)
         step_timer = time.time()
         reset_time = step_timer - self.reset_timer
+
+        # Log Positions
+        if time.time() - self.log_timer > 0.1:
+            for i in range(self.num_robots):
+                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%poss[i].x, '%0.2f'%poss[i].y])
+            self.log_timer = time.time()
 
 
         # ========================================================================= #
@@ -305,7 +320,7 @@ class WaypointNavigation:
             print("Episode time: %0.2f"%art)
 
         if self.is_timeout == True:
-            self.counter_collision += 1
+            self.counter_timeout += 1
             self.counter_step += 1
             print("Timeout!")
 
@@ -313,6 +328,11 @@ class WaypointNavigation:
         self.is_collided = False
         self.is_goal = False
         self.is_timeout = False
+
+        print("counter_step: {}".format(self.counter_step))
+        print("counter_success: {}".format(self.counter_success))
+        print("counter_collision: {}".format(self.counter_collision))
+        print("counter_timeout: {}".format(self.counter_timeout))
 
         # ========================================================================= #
 	    #                                  RESET                                    #
@@ -397,10 +417,13 @@ class WaypointNavigation:
             with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Beta_const', 'Sensitivity', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 or self.counter_success != 0):
-                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
             else:
                 succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
@@ -422,6 +445,7 @@ class WaypointNavigation:
             self.arrival_time = []
             self.counter_collision = 0
             self.counter_success = 0
+            self.counter_timeout = 0
             self.target_index = 0
             
         
