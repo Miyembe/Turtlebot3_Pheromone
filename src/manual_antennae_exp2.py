@@ -63,7 +63,7 @@ class WaypointNavigation:
 
         # Initialise parameters
         
-        self.step_size = 0.1
+        self.step_size = 0.05
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
         self.v_range = np.arange(0.2, 0.6, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
