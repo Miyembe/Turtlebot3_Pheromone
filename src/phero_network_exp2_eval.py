@@ -621,7 +621,7 @@ class PPO:
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         model = make_model()                            
-        model.restore("/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/20210125-115213/03100r3.66")
+        model.restore("/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/checkpoints/TVTexperiment/00800r3.27")
 
         runner = Runner(env=self.env, model=model, nsteps=nsteps, gamma=gamma, lam=lam) # How can I make it 
         runner.exprun()
