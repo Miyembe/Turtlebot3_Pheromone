@@ -146,6 +146,7 @@ class Env:
         self.is_goal = 0
         self.is_timeout = False
         self.is_exp_done = False
+        self.is_traj = True
 
         self.reset_timer = time.time()
 
@@ -339,9 +340,10 @@ class Env:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
-            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
-                csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['time', 'ID', 'x', 'y'])
+            if self.is_traj == True:
+                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
 
         if self.counter_step != 0:
@@ -533,7 +535,7 @@ class Env:
         reset_time = step_timer - self.reset_timer
         
         # Log Positions
-        if time.time() - self.log_timer > 0.5:
+        if time.time() - self.log_timer > 0.5 and self.is_traj == True:
             for i in range(self.num_robots):
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
