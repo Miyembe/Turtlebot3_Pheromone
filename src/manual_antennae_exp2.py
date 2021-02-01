@@ -11,8 +11,8 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.msg import ModelState 
 from geometry_msgs.msg import Twist
 from gazebo_msgs.srv import SetModelState
-from turtlebot3_waypoint_navigation.srv import PheroReset, PheroResetResponse
-from turtlebot3_waypoint_navigation.msg import fma
+from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+from turtlebot3_pheromone.msg import fma
 from tf.transformations import quaternion_from_euler
 from math import *
 from time import sleep
@@ -99,8 +99,8 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.9, 1.3+self.step_size, self.step_size)
-        self.s_range = np.arange(0.4, 1+self.step_size, self.step_size)
+        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
+        self.s_range = np.arange(0.4, 0.4+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
         self.s_size = self.s_range.size
@@ -394,7 +394,7 @@ class WaypointNavigation:
 	    #                                  LOGGING                                  #
 	    # ========================================================================= #
         if self.counter_step == 0:
-            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Beta_const', 'Sensitivity', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
 
@@ -409,12 +409,12 @@ class WaypointNavigation:
             print("Beta_const: {}, Sensitivity: {}".format(self.beta_const, self.sensitivity))
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 20 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
             
-            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.beta_const, '%0.2f'%self.sensitivity, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
             

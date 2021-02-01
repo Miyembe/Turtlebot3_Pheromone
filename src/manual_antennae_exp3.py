@@ -131,8 +131,8 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.9, 1.3+self.step_size, self.step_size)
-        self.s_range = np.arange(0.4, 1+self.step_size, self.step_size)
+        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
+        self.s_range = np.arange(1.0, 1.9+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
         self.s_size = self.s_range.size
@@ -241,7 +241,7 @@ class WaypointNavigation:
 	    #                          Action & State assignment                        #
 	    # ========================================================================= #
         
-        if any([dis <= 0.33 for dis in distance_btw_robots[i]]) == True:
+        if any([dis <= 0.34 for dis in distance_btw_robots[i]]) == True:
             self.is_collided = True
             self.reset()
         elif any([dis <= 0.35 for dis in distance_to_obstacle[i]]) == True:
@@ -546,7 +546,7 @@ class WaypointNavigation:
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 or self.counter_success != 0):
-                succ_percentage = 100*self.counter_success/(self.counter_step)
+                succ_percentage = 100*self.counter_success/(self.counter_collision+self.counter_success+self.counter_timeout)
             else:
                 succ_percentage = 0
             print("Counter: {}".format(self.counter_step))
