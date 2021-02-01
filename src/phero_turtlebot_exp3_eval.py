@@ -127,6 +127,7 @@ class Env:
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
         self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
+        self.traj_name = "{}_traj".format(self.file_name)
         print(self.file_name)
 
         # Experiments
@@ -145,8 +146,12 @@ class Env:
         self.is_goal = 0
         self.is_timeout = False
         self.is_exp_done = False
+        self.is_traj = True
 
         self.reset_timer = time.time()
+
+        # Log related
+        self.log_timer = time.time()
 
     #To be done when real robots are used
     
@@ -335,6 +340,11 @@ class Env:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+            if self.is_traj == True:
+                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['time', 'ID', 'x', 'y'])
+
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 or self.counter_success != 0 or self.counter_timeout !=0):
@@ -348,10 +358,10 @@ class Env:
             print("Counter: {}".format(self.counter_step))
             print("Success: {}, Collision: {}, Timeout: {}".format(self.counter_success, self.counter_collision, self.counter_timeout))
 
-        if (self.counter_step % 10 == 0 and self.counter_step != 0):
+        if (self.counter_step % 1 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 100 == 0 and self.counter_step != 0):
+        if (self.counter_step % 1 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -491,7 +501,7 @@ class Env:
         distance_to_goals_prv = [None]*self.num_robots
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
-
+        
         state_prev = self.phero_ig.get_msg()
         phero_prev = [phero.data for phero in state_prev.values]
         # 1. Move robot with the action input for time_step
@@ -520,6 +530,17 @@ class Env:
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
+
+        step_timer = time.time()
+        reset_time = step_timer - self.reset_timer
+        
+        # Log Positions
+        if time.time() - self.log_timer > 0.5 and self.is_traj == True:
+            for i in range(self.num_robots):
+                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x[i], '%0.2f'%y[i]])
+            self.log_timer = time.time()
 
         theta = self.angle0To360(theta)
         global_angle = self.angle0To360(global_angle)
