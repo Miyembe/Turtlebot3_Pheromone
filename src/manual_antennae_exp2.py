@@ -101,7 +101,7 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.6, 0.85+self.step_size, self.step_size)
+        self.b_range = np.arange(0.9, 1.4+self.step_size, self.step_size)
         self.s_range = np.arange(0.4, 1.4+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
@@ -175,12 +175,12 @@ class WaypointNavigation:
         reset_time = step_timer - self.reset_timer
 
         # Log Positions
-        if time.time() - self.log_timer > 0.1:
-            for i in range(self.num_robots):
-                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
-                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%poss[i].x, '%0.2f'%poss[i].y])
-            self.log_timer = time.time()
+        # if time.time() - self.log_timer > 0.1:
+        #     for i in range(self.num_robots):
+        #         with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+        #                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        #                 csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%poss[i].x, '%0.2f'%poss[i].y])
+        #     self.log_timer = time.time()
 
 
         # ========================================================================= #
