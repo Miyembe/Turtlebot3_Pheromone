@@ -253,7 +253,7 @@ class WaypointNavigation:
 	    #                          Action & State assignment                        #
 	    # ========================================================================= #
         
-        if any([dis <= 0.33 for dis in distance_btw_robots[i]]) == True:
+        if any([dis <= 0.34 for dis in distance_btw_robots[i]]) == True:
             self.is_collided = True
             self.reset()
         elif any([dis <= 0.35 for dis in distance_to_obstacle[i]]) == True:

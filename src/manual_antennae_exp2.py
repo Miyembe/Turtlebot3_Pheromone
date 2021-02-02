@@ -101,7 +101,7 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.6, 0.6+self.step_size, self.step_size)
+        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
         self.s_range = np.arange(0.4, 0.4+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
