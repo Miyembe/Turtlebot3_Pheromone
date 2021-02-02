@@ -204,7 +204,7 @@ class Env:
             else:
                 self.target_index = 0
                 
-        angle_target = self.target_index*2*pi/self.num_experiments        
+        angle_target = (self.target_index-1)*2*pi/self.num_experiments        
 
         self.x[0] = (self.d_robots/2)*cos(angle_target)
         self.y[0] = (self.d_robots/2)*sin(angle_target)
@@ -533,11 +533,11 @@ class Env:
         reset_time = step_timer - self.reset_timer
         
         # Log Positions
-        if time.time() - self.log_timer > 0.5:
+        if time.time() - self.log_timer > 0.1:
             for i in range(self.num_robots):
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x[i], '%0.2f'%y[i]])
+                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.4f'%x[i], '%0.4f'%y[i]])
             self.log_timer = time.time()
 
         theta = self.angle0To360(theta)
