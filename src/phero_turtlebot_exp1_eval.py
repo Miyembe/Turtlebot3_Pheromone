@@ -119,6 +119,7 @@ class Env:
         # File name
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
         self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
+        self.traj_name = "{}_traj".format(self.file_name)
         print(self.file_name)
 
         # Experiments
@@ -135,6 +136,12 @@ class Env:
         self.is_goal = 0
         self.is_timeout = False
         self.done = False
+
+        self.is_traj = True
+
+        # Log related
+
+        self.log_timer = time.time()
 
         self.reset_timer = time.time()
 
@@ -261,6 +268,10 @@ class Env:
             with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+            if self.is_traj == True:
+                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 and self.counter_success != 0):
@@ -346,6 +357,17 @@ class Env:
         y = pose.position.y
         angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
         theta = angles[2]
+
+        step_timer = time.time()
+        reset_time = step_timer - self.reset_timer
+        
+        # Log Positions
+        if time.time() - self.log_timer > 0.5 and self.is_traj == True:
+            for i in range(self.num_robots):
+                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x, '%0.2f'%y])
+            self.log_timer = time.time()
 
         # 3. Calculate the distance & angle difference to goal 
         distance_to_goal = sqrt((x-self.target_x)**2+(y-self.target_y)**2)

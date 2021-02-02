@@ -104,14 +104,8 @@ class WaypointNavigation:
         self.reset_flag = False
 
         # antenna movement related parameters
-<<<<<<< HEAD
-
-        self.b_range = np.arange(1.1, 1.1+self.step_size, self.step_size)
-        self.s_range = np.arange(0.75, 0.75+self.step_size, self.step_size)
-=======
         self.b_range = np.arange(1.1, 1.1+self.step_size, self.step_size)
         self.s_range = np.arange(0.8, 0.8+self.step_size, self.step_size)
->>>>>>> bb9251dc9d249267f1f0bb2cdae7909166d74a7b
 
         self.b_size = self.b_range.size
         self.s_size = self.s_range.size
@@ -425,11 +419,7 @@ class WaypointNavigation:
             print("Beta_const: {}, Sensitivity: {}".format(self.beta_const, self.sensitivity))
             print("Success Rate: {}%".format(succ_percentage))
 
-<<<<<<< HEAD
-        if (self.counter_step % 100 == 0 and self.counter_step != 0):
-=======
         if (self.counter_step % 1 == 0 and self.counter_step != 0):
->>>>>>> bb9251dc9d249267f1f0bb2cdae7909166d74a7b
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
