@@ -45,4 +45,5 @@ Currently there are sample pheromone data in tmp/Pheormone\samples.
 During training, tensorflow summary is saved in the directory src/log. If you want to plot data using TensorBoard, install TensorBoard using (pip install tensorboard) command and run the command tensorboard --logdir src/log/tf_board/YOURDATA_dir (YOURDATA_dir is a directory in which your event data is saved.) and open an empty browser and go to localhost:6006. 
 
 3. How to visualise the pregenerated pheromone map?
+
 In "src/plot_script", there is a script called pheromone_plot.py and pheromone_plot_generation.ipynb. Open the script and choose the pheromone map file in "tmp/***.npy"
