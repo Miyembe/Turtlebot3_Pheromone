@@ -111,15 +111,10 @@ class PheroTurtlebotPolicy(object):
         self.value = value
 
     def net(self, phero):
-        '''
-        Policy Network 
-        '''
-        # 20201009 Simple neural net. Needs to be modified for better output.
+        # Network Architecture
         net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 256, activation=tf.nn.relu)
         net = tf.layers.dense(net, 128, activation=tf.nn.relu)
-        #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
-
         return net
 
 # Class of Actor Critic Model for PPO
@@ -142,12 +137,14 @@ class Model(object):
 
         # Create two models
         ## Actor model for sampling
-        print("Pre Model")
         act_model = policy(sess, ob_space, ac_space, nbatch_act, 1, reuse=False, deterministic=deterministic)
         ## Train model for training
         train_model = policy(sess, ob_space, ac_space, nbatch_train, nsteps, reuse=True, deterministic=deterministic)
-        print("After Model")
-        '''Create Placeholders'''
+
+        ##################################################
+        ##             Create Placeholders              ##
+        ##################################################
+
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
         R = tf.placeholder(tf.float32, [None])
@@ -167,7 +164,10 @@ class Model(object):
         entropy = tf.reduce_mean(train_model.pd.entropy())
 
 
-        ''' LOSS CALCULATION '''
+        ##################################################
+        ##               LOSS CALCULATION               ##
+        ##################################################
+
         # Total loss = Policy gradient loss (clipped) - entropy * entropy coefficient + Value coefficient * value loss
         
         # Clip the value to reduce variability during Critic training
@@ -193,7 +193,10 @@ class Model(object):
         # Calculate total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
-        ''' UPDATE THE PARAMETERS USING LOSS '''
+        ##################################################
+        ##       UPDATE THE PARAMETERS USING LOSS       ##
+        ##################################################
+
         # 1. Get the model parameters
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
@@ -215,26 +218,11 @@ class Model(object):
         # Reshaping the state arrays for training (to feed in the neural network)
         # 20201009 needs to rewrite for Phero TUrtlebot use
         def reshape(ids, obs, returns, masks, actions, values, neglogpacs):
-            
-            
-            # ib = np.asarray([[o["id"] for o in iobs] for iobs in obs])
-            # lb = np.asarray([[o["laser"] for o in iobs] for iobs in obs])
-            # rb = np.asarray([[o["rel_goal"] for o in iobs] for iobs in obs])
-            # vb = np.asarray([[o["velocities"] for o in iobs] for iobs in obs])
-
-            #lb = np.reshape(lb, (len(lb)*len(lb[0]), 512, 3), 'F')
-
+            # Reshaping values
             pb = reshape2d(obs)
-            #rb = reshape2d(rb)
-            #vb = reshape2d(vb)
-
             ids = reshape1d(ids)
-
             actions = reshape2d(actions)
-
             advs = returns - values
-            #advs = (advs - advs.mean()) / (advs.std() + 1e-8)
-
             advs = reshape1d(advs)
             returns = reshape1d(returns)
             neglogpacs = reshape1d(neglogpacs)
@@ -244,12 +232,9 @@ class Model(object):
 
         
         def train(lr, cliprange, ids, obs, returns, masks, actions, values, neglogpacs, states=None):
-            '''
-            Put values into placeholders and train the policy neural network
-            '''
+            # Put values into placeholders and train the policy neural network
             pb, advs, returns, masks, actions, values, neglogpacs = reshape(ids, obs, returns, masks, actions, values, neglogpacs)
             
-            #print("pb: {}, advs: {}, returns: {}, masks: {}, actions: {}, values: {}, neglogpacs: {}".format(pb.shape, advs.shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape))
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             
@@ -350,7 +335,6 @@ class Runner(AbstractEnvRunner):
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
 
-            # 20201009 Need to modify these inputs
             self.ids, self.obs, rewards, self.dones, infos = self.env.step(actions, 0.1)
             for info in infos:
                 maybeepinfo = info.get('episode')
@@ -365,6 +349,7 @@ class Runner(AbstractEnvRunner):
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs, self.states, self.dones)
+
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
@@ -374,14 +359,10 @@ class Runner(AbstractEnvRunner):
                 if t == self.nsteps - 1:
                     nextnonterminal = 1.0 - self.dones[i]
                     nextvalues = last_values[i]
-                    #print("nextvalues: {}".format(nextvalues))
                 else:
                     nextnonterminal = 1.0 - mb_dones[t+1][i]
                     nextvalues = mb_values[t+1][i]
-                    #print("nextvalues: {}".format(nextvalues))
                 delta = mb_rewards[t][i] + self.gamma * nextvalues * nextnonterminal - mb_values[t][i]
-                #print("delta: {}".format(delta))
-                #print("mb_rewards: {}, mb_values: {}, self.gamma: {}, nextvalues: {}, nextnonterminal: {}".format(mb_rewards[t][i], mb_values[t][i], self.gamma, nextvalues, nextnonterminal))
                 mb_advs[t][i] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
             mb_returns = mb_advs + mb_values
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
@@ -431,7 +412,7 @@ class PPO:
         logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
-        # reassigning the members of class into this function for simplicity
+        # Reassigning the members of class into this function for simplicity
         total_timesteps = int(self.total_timesteps)
         nenvs = 1
         #nenvs = env.num_envs # for multiple instance training
@@ -456,12 +437,6 @@ class PPO:
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
         
-        # Save function 
-        # if save_interval and logger_ins.get_dir():
-        #     import cloudpickle
-        #     with open(osp.join(logger_ins.get_dir(), 'make_model.pkl'), 'wb') as fh:
-        #         fh.write(cloudpickle.dumps(make_model))
-
         # Make a model
         model = make_model()
 
@@ -550,9 +525,10 @@ class PPO:
             tnow = time.time()
             fps = int(nbatch / (tnow - tstart))
             
-            '''
-            Logging and saving model & weights
-            '''
+            ##################################################
+            ##      Logging and saving model & weights      ##
+            ##################################################
+
             if update % log_interval == 0 or update == 1:
                 #ev = explained_variance(values, returns)
                 logger_ins.logkv("serial_timesteps", update*nsteps)

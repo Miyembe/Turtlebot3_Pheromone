@@ -23,6 +23,11 @@ from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
 
 class Antennae():
+    '''
+    Description:
+    Antennae class defining the shape of antennae and 
+    define the position of end of the antennae with the given robot position
+    '''
     def __init__(self):
         self.length = 0.45
         self.tilt_angle = 0.5 # radian

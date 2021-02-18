@@ -38,7 +38,7 @@ import scipy.io as sio
 
 class InfoGetter(object):
     '''
-    Get Pheromone Information
+    Get Information from rostopic. It reduces delay 
     '''
     def __init__(self):
         #event that will block until the info is received
@@ -67,7 +67,10 @@ class Env:
 	# ========================================================================= #
 
     '''
-    Class of connecting Simulator and DRL training
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
     '''
 
     def __init__(self):
@@ -140,12 +143,6 @@ class Env:
         self.dones = [False] * self.num_robots
         self.grad_sensitivity = 20
 
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
-
     def reset(self, model_state = None, id_bots = 3):
         
         self.is_collided = False
@@ -154,11 +151,10 @@ class Env:
         Resettng the Experiment
         1. Update the counter based on the flag from step
         2. Assign next positions and reset
-        3. Log the result in every selected time-step
         '''
 
         # ========================================================================= #
-	    #                            TARGET UPDATE                                  #
+	    #                           1. TARGET UPDATE                                #
 	    # ========================================================================= #
 
         # ID assignment 
@@ -198,7 +194,7 @@ class Env:
         self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
         
         # ========================================================================= #
-	    #                                  RESET                                    #
+	    #                                2. RESET                                   #
 	    # ========================================================================= #
 
         # Reset Turtlebot 1 position
@@ -259,8 +255,6 @@ class Env:
 
         return range(0, self.num_robots), initial_state
 
-        # When turtlebot is collided with wall, obstacles etc - need to reset
-        # def turtlebot_collsion(self):
 
     def action_to_twist(self, action):
         '''
@@ -277,7 +271,8 @@ class Env:
     
     def posAngle(self, model_state):
         '''
-        Function Returns Pose from ModelStates
+        Get model_state from rostopic and
+        return (1) x position of robots (2) y position of robots (3) angle of the robots (4) id of the robots
         '''
         pose = [None]*self.num_robots
         ori = [None]*self.num_robots
@@ -341,9 +336,7 @@ class Env:
         record_time = start_time
         record_time_step = 0
         
-        #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        #twists_rsc = [Twist()]*self.num_robots
 
         # rescaling the action
         for i in range(len(twists)):
@@ -377,7 +370,6 @@ class Env:
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
-        #print("Model State: {}".format(model_state))
         x, y, theta, idx = self.posAngle(model_state)
         self.x_prev = x
         self.y_prev = y
@@ -396,15 +388,11 @@ class Env:
         # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
         phero_now = [phero.data for phero in state.values]
-
-        #phero_now = self.phero_ig.get_msg().data
         phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
 
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, phero_now))
-        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
@@ -420,6 +408,7 @@ class Env:
         angular_punish_rewards = [0.0]*self.num_robots
         linear_punish_rewards = [0.0]*self.num_robots
         time_rewards = [0.0]*self.num_robots        
+
         ## 5.1. Distance Reward
         goal_progress = [a - b for a, b in zip(distance_to_goals_prv, distance_to_goals)]
 
@@ -432,14 +421,11 @@ class Env:
                         distance_rewards[i] = goal_progress[i]
             else:
                 distance_rewards[i] = 0.0
-        # for i in range(self.num_robots):
-        #     if dones[i] == True:
-        #         distance_rewards[i] = 0.0
+
         self.just_reset == False
         
         ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
-        #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
-        phero_rewards = [0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
+        phero_rewards = [0.0, 0.0] #[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 5.3. Goal reward
         ### Reset condition is activated when both two robots have arrived their goals 

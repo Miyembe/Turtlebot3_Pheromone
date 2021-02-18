@@ -33,7 +33,7 @@ import random
 
 class InfoGetter(object):
     '''
-    Get Pheromone Information
+    Get Information from rostopic. It reduces delay 
     '''
     def __init__(self):
         #event that will block until the info is received
@@ -48,9 +48,9 @@ class InfoGetter(object):
         self._event.set()
 
     def get_msg(self, timeout=None):
-        #"""Blocks until the data is rx'd with optional timeout
-        #Returns the received message
-        #"""
+        # Blocks until the data is rx'd with optional timeout
+        # Returns the received message
+        
         self._event.wait(timeout)
         return self._msg
 
@@ -62,7 +62,10 @@ class Env:
 	# ========================================================================= #
 
     '''
-    Class of connecting Simulator and DRL training
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
     '''
 
     def __init__(self):
@@ -82,10 +85,6 @@ class Env:
 
         self.pose_info = rospy.Subscriber("/gazebo/model_states", ModelStates, self.pose_ig)
         self.phero_info = rospy.Subscriber("/phero_value", Float32MultiArray, self.phero_ig)
-
-        ## tf related lines. Needed for real turtlebot odometry reading.
-        #   Skip for now. 
-
         self.rate = rospy.Rate(100)
 
         # Default Twist message
@@ -97,7 +96,7 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 6 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
@@ -124,25 +123,16 @@ class Env:
         self.dis_rwd_norm = 7
         self.grad_sensitivity = 20
         self.theta = 0
-        print("werwerq")
-
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
 
     def reset(self):
-
         '''
         Resettng the Experiment
         1. Update the counter based on the flag from step
-        2. Assign next positions and reset
-        3. Log the result in every selected time-step
+        2. Assign next positions and reset the positions of robots and targets
         '''
 
         # ========================================================================= #
-	    #                            TARGET UPDATE                                  #
+	    #                          1. TARGET UPDATE                                 #
 	    # ========================================================================= #
         
         self.is_collided = False
@@ -162,7 +152,7 @@ class Env:
         
 
         # ========================================================================= #
-	    #                                  RESET                                    #
+	    #                                 2. RESET                                  #
 	    # ========================================================================= #
 
         # Reset Turtlebot position
@@ -234,7 +224,6 @@ class Env:
         record_time_step = 0
 
         # rescaling the action
-        print("twist: [{}, {}]".format(linear_x, angular_z))
         linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
         linear_x = (linear_x+1)*1/2
@@ -244,7 +233,6 @@ class Env:
         self.move_cmd.linear.x = linear_x
         self.move_cmd.angular.z = angular_z
         action = np.array([linear_x, angular_z])
-        print("action: {}".format(action))
         self.rate.sleep()
         done = False
 
@@ -295,13 +283,12 @@ class Env:
         phero_now = self.phero_ig.get_msg().data
         phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
         
-        print("phero_grad: {}".format(phero_grad))
         state_arr = phero_grad
-        #state_arr = np.append(state_arr, np.asarray(phero_now))
+        state_arr = np.append(state_arr, phero_now)
         state_arr = np.append(state_arr, distance_to_goal)
-        #state_arr = np.append(state_arr, linear_x)
-        #state_arr = np.append(state_arr, angular_z)
         state_arr = np.append(state_arr, angle_diff)
+        state_arr = np.append(state_arr, linear_x)
+        state_arr = np.append(state_arr, angular_z)
         state = state_arr.reshape(1, self.state_num)
 
         # 5. Reward assignment
@@ -318,7 +305,6 @@ class Env:
             distance_reward = goal_progress
         
         ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
-        #phero_sum = np.sum(phero_vals)
         phero_grad_sum = np.sum(phero_grad)
         phero_reward_coef = 1
         phero_reward = -phero_grad_sum * phero_reward_coef
@@ -367,6 +353,7 @@ class Env:
             time.sleep(0.5)
         end_time = time.time()
         step_time = end_time - start_time
+
         # 7. Other Debugging 
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]
         self.ep_len_counter = self.ep_len_counter + 1

@@ -33,6 +33,9 @@ import random
 
 
 class InfoGetter(object):
+    '''
+    Get Information from rostopic. It reduces delay 
+    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -54,6 +57,17 @@ class InfoGetter(object):
 
 
 class Env:
+
+    # ========================================================================= #
+	#                                Env Class                                  #
+	# ========================================================================= #
+
+    '''
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
+    '''
 
     def __init__(self):
 
@@ -145,16 +159,18 @@ class Env:
 
         self.reset_timer = time.time()
 
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
-
     def reset(self):
-        
-        #self.is_collided = False
+        '''
+        Resettng the Experiment
+        1. Counter Update
+        2. Update the counter based on the flag from step
+        3. Assign next positions and reset the positions of robots and targets
+        '''
 
+        # ========================================================================= #
+	    #                          1. COUNTER UPDATE                                #
+	    # ========================================================================= #
+        
         #Increment Collision Counter
         if self.is_collided == True:
             print("Collision!")
@@ -180,20 +196,10 @@ class Env:
         self.is_collided = False
         self.is_goal = False
         self.is_timeout = False
-        # index_list = [-1, 0, 1]
-        # index_x = random.choice(index_list)
-
-        # if index_x==0:
-        #     index_list1 = [-1, 1]
-        #     index_y = random.choice(index_list1)
-        # else:
-        #     index_list1 = [-1, 0, 1]
-        #     index_y = random.choice(index_list1)
-
-
-        # self.target_x = (np.random.random()-0.5)*1 + 3.5*index_x
-        # self.target_y = (np.random.random()-0.5)*1 + 3.5*index_y
-        
+ 
+        # ========================================================================= #
+	    #                           2. TARGET UPDATE                                #
+	    # ========================================================================= #
 
         angle_target = self.target_index*2*pi/self.num_experiments        
 
@@ -208,6 +214,9 @@ class Env:
         self.theta = angle_target
         quat = quaternion_from_euler(0,0,self.theta)
         
+        # ========================================================================= #
+	    #                                 3. RESET                                  #
+	    # ========================================================================= #
 
         # Reset Turtlebot position
         state_msg = ModelState()
@@ -262,7 +271,9 @@ class Env:
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
 
-        ################################### Logging #########################################
+        # ========================================================================= #
+	    #                                 4. LOGGING                                #
+	    # ========================================================================= #
 
         if self.counter_step == 0:
             with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
@@ -306,14 +317,8 @@ class Env:
         self.done = False
         return range(0, self.num_robots), initial_state
 
-        # When turtlebot is collided with wall, obstacles etc - need to reset
-        # def turtlebot_collsion(self):
-
     def step(self, time_step=0.1, linear_x=0.2, angular_z=0.0):
-        # 20201010 How can I make the action input results in the change in state?
-        # I read tensorswarm, and it takes request and go one step.
-        # It waited until m_loop_done is True - at the end of the post step.
-        
+
         # 0. Initiliasation
         start_time = time.time()
         record_time = start_time

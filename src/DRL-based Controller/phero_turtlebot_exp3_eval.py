@@ -27,7 +27,7 @@ import threading
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-# import keras.backend as K
+import keras.backend as K
 import gym
 import numpy as np
 import random
@@ -38,6 +38,9 @@ import scipy.io as sio
 
 
 class InfoGetter(object):
+    '''
+    Get Information from rostopic. It reduces delay 
+    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -59,6 +62,17 @@ class InfoGetter(object):
 
 
 class Env:
+
+    # ========================================================================= #
+	#                                Env Class                                  #
+	# ========================================================================= #
+
+    '''
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
+    '''
 
     def __init__(self):
 
@@ -153,13 +167,15 @@ class Env:
         # Log related
         self.log_timer = time.time()
 
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
-
     def reset(self, model_state = None, id_bots = 999):
+
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Target Update
+        3. Reset robot and target
+        4. Logging
+        '''
         
         #self.is_collided = False
         print("goal value: {}".format(self.is_goal))
@@ -171,6 +187,10 @@ class Env:
             for i, name in enumerate(model_state.name):
                 if 'tb3' in name:
                     tb3[int(name[-1])] = i
+
+        # ========================================================================= #
+	    #                          1. COUNTER UPDATE                                #
+	    # ========================================================================= #
 
         # Increment Collision Counter
         if self.is_collided == True:
@@ -197,6 +217,10 @@ class Env:
         self.is_collided = False
         self.is_goal = 0
         self.is_timeout = False
+
+        # ========================================================================= #
+	    #                          2. TARGET UPDATE                                 #
+	    # ========================================================================= #
 
         # Reset position assignment
         if id_bots == 999: 
@@ -235,9 +259,11 @@ class Env:
         
 
 
-        #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
+        # ========================================================================= #
+	    #                                 3. RESET                                  #
+	    # ========================================================================= #
         
-       # Reset Turtlebot 1 position
+        # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
         state_msg.pose.position.x = self.x[0]
@@ -282,11 +308,6 @@ class Env:
         state_msg4.pose.orientation.y = quat4[1]
         state_msg4.pose.orientation.z = quat4[2]
         state_msg4.pose.orientation.w = quat4[3]
-
-
-        # Reset Pheromone Grid
-        #
-        #
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -334,7 +355,9 @@ class Env:
         
         self.dones = [False] * self.num_robots
 
-        ################################### Logging #########################################
+        # ========================================================================= #
+	    #                                 4. LOGGING                                #
+	    # ========================================================================= #
 
         if self.counter_step == 0:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
@@ -377,9 +400,6 @@ class Env:
         
         return range(0, self.num_robots), initial_state
 
-        # When turtlebot is collided with wall, obstacles etc - need to reset
-        # def turtlebot_collsion(self):
-
     def action_to_twist(self, action):
         t = Twist()
 
@@ -391,6 +411,10 @@ class Env:
         return t
     
     def posAngle(self, model_state):
+        '''
+        Get model_state from rostopic and
+        return (1) x position of robots (2) y position of robots (3) angle of the robots (4) id of the robots
+        '''
         pose = [None]*self.num_robots
         ori = [None]*self.num_robots
         x = [None]*self.num_robots
@@ -417,28 +441,6 @@ class Env:
             theta[i] = angles[i][2]
         idx = [tb3_0, tb3_1, tb3_2, tb3_3]
         return x, y, theta, idx
-        # pose = [None]*self.num_robots
-        # ori = [None]*self.num_robots
-        # x = [None]*self.num_robots
-        # y = [None]*self.num_robots
-        # angles = [None]*self.num_robots
-        # theta = [None]*self.num_robots
-        # for i in range(len(model_state.name)):
-        #     if model_state.name[i] == 'tb3_0':
-        #         tb3_0 = i
-        #     if model_state.name[i] == 'tb3_1':
-        #         tb3_1 = i
-        # tb3_pose = [model_state.pose[tb3_0], model_state.pose[tb3_1]]
-        # for i in range(self.num_robots):
-        #     # Write relationship between i and the index
-        #     pose[i] = tb3_pose[i] # Need to find the better way to assign index for each robot
-        #     ori[i] = pose[i].orientation
-        #     x[i] = pose[i].position.x
-        #     y[i] = pose[i].position.y
-        #     angles[i] = tf.transformations.euler_from_quaternion((ori[i].x, ori[i].y, ori[i].z, ori[i].w))
-        #     theta[i] = angles[i][2]
-        # idx = [tb3_0, tb3_1]
-        # return x, y, theta, idx
 
     def angle0To360(self, angle):
         for i in range(self.num_robots):
@@ -462,38 +464,31 @@ class Env:
         return tmp
 
     def step(self, actions, time_step=0.1):
-        # 20201010 How can I make the action input results in the change in state?
-        # I read tensorswarm, and it takes request and go one step.
-        # It waited until m_loop_done is True - at the end of the post step.
-        
-        #print("Actions: {}".format(actions))
+        '''
+        Take a step with the given action from DRL in the Environment
+        0. Initialisation
+        1. Move Robot for given time step
+        2. Read robot pose
+        3. Calculation of distances
+        4. Read Pheromone
+        5. Reward Assignment
+        6. Reset
+        7. Other Debugging Related
+        '''
+
         # 0. Initiliasation
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
-        
-        #print("Actions form network: {}".format(np.asarray(actions).shape))
+
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        #twists_rsc = [Twist()]*self.num_robots
-        #print("twists: {}".format(twists))
         # rescaling the action
         for i in range(len(twists)):
             twists[i].linear.x = (twists[i].linear.x+0.5) * 2/3 # only forward motion
             twists[i].angular.z = twists[i].angular.z
-        #print("twists UP: {}".format(twists))
-        
-        #print("twists: {}".format(twists))
-        #print("twists_rsc: {}".format(twists_rsc))
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        #print("len twists: {}".format(len(twists)))
-        #print("len twists_rsc: {}".format(len(twists_rsc)))
-        #linear_x_rsc = [i.linear.x for i in twists_rsc]
-        #angular_z_rsc = [i.angular.z for i in twists_rsc]
         dones = self.dones
-        #print("Linear: {}, Angular: {}".format(linear_x, angular_z))
-        #print("Linear_rsc: {}, Angular_rsc: {}".format(linear_x_rsc, angular_z_rsc))
-        
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -504,6 +499,7 @@ class Env:
         
         state_prev = self.phero_ig.get_msg()
         phero_prev = [phero.data for phero in state_prev.values]
+
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
             for i in range(self.num_robots):
@@ -518,7 +514,6 @@ class Env:
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
-        #print("Model State: {}".format(model_state))
         x, y, theta, idx = self.posAngle(model_state)
         self.x_prev = x
         self.y_prev = y
@@ -526,7 +521,6 @@ class Env:
         # 3. Calculate the distance & angle difference to goal \
         distance_to_goals = [None]*self.num_robots
         global_angle = [None]*self.num_robots
-        #print("x : {}, y: {}".format(x,y))
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
@@ -535,11 +529,7 @@ class Env:
         reset_time = step_timer - self.reset_timer
         
         # Log Positions
-<<<<<<< HEAD
-        if time.time() - self.log_timer > 0.1:
-=======
         if time.time() - self.log_timer > 0.5 and self.is_traj == True:
->>>>>>> bb9251dc9d249267f1f0bb2cdae7909166d74a7b
             for i in range(self.num_robots):
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -552,14 +542,6 @@ class Env:
         angle_diff = self.anglepiTopi(angle_diff)
 
         # 4. Read pheromone (state) from the robot's position
-        # rospy.wait_for_service('phero_read')
-        # try:
-        #     phero_read = rospy.ServiceProxy('phero_read', PheroRead)
-        #     resp = phero_read(x, y)
-        # except rospy.ServiceException as e:
-        #     print("Service Failed %s"%e)
-        #print([wow.data for wow in resp.value])
-        # 4. Read pheromone (state) from the robot's position
 
         state = self.phero_ig.get_msg()
         phero_now = [phero.data for phero in state.values]
@@ -568,9 +550,7 @@ class Env:
         
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        #print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, phero_now))
-        #print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
@@ -578,7 +558,6 @@ class Env:
 
         # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
-        #print("state shape: {}".format(states.shape))
         
         # 6. Reward assignment
         ## 6.0. Initialisation of rewards
@@ -602,9 +581,6 @@ class Env:
             else:
                 distance_rewards[i] = 0.0
             distance_rewards[i] *= time_step_factor
-        # for i in range(self.num_robots):
-        #     if dones[i] == True:
-        #         distance_rewards[i] = 0.0
         
         self.just_reset == False
         

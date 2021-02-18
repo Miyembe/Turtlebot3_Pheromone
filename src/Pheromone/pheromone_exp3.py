@@ -23,6 +23,11 @@ from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
 
 class Antennae():
+    '''
+    Description:
+    Antennae class defining the shape of antennae and 
+    define the position of end of the antennae with the given robot position
+    '''
     def __init__(self):
         self.length = 0.45
         self.tilt_angle = 0.5 # radian
@@ -219,7 +224,7 @@ class Node():
                 phero_val[i][j] = min(self.phero_max, max(self.phero_min, phero_val[i][j]))
             phero_arr[i].data = phero_val[i]
 
-        print("phero 0: {}, phero 1: {}, phero 2: {}, phero 3: {}".format(phero_arr[0].data, phero_arr[1].data, phero_arr[2].data, phero_arr[3].data))
+        # Pheromone reading values sent to the rostopic (controller script can access it by subscribing it)
         self.pub_phero.publish(phero_arr)
 
         ''' Read Pheromone from each pheromone grid '''

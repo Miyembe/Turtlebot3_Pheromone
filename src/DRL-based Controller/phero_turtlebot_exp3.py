@@ -36,6 +36,9 @@ import scipy.io as sio
 
 
 class InfoGetter(object):
+    '''
+    Get Information from rostopic. It reduces delay 
+    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -58,6 +61,17 @@ class InfoGetter(object):
 
 class Env:
 
+    # ========================================================================= #
+	#                                Env Class                                  #
+	# ========================================================================= #
+
+    '''
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
+    '''
+
     def __init__(self):
 
         # Settings
@@ -78,13 +92,6 @@ class Env:
 
         self.pose_info = rospy.Subscriber("/gazebo/model_states", ModelStates, self.pose_ig)
         self.phero_info = rospy.Subscriber("/phero_value", fma, self.phero_ig)
-
-        
-
-        ## tf related lines. Needed for real turtlebot odometry reading.
-        #   Skip for now. 
-        #
-
         self.rate = rospy.Rate(100)
 
         # Default Twist message
@@ -96,11 +103,10 @@ class Env:
         self.is_collided = False
 
         # Observation & action spaces
-        self.state_num = 8 # 9 for pheromone, 1 for local angle, 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
+        self.state_num = 8 # 2 for pheromone grad, 2 for pheromone value, 2 for linear & angular vel, 2 for distance and angle diff to the target in polar coordinates
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
-        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
-
+        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
         # Previous positions
         self.x_prev = [-2.5, 2.5, 0.0, 0.0]#[0.0, 2.0] # [0.0,4.0]
         self.y_prev = [0.0, 0.0, -2.5, 2.5] #[0.0, -2.0]  # [0.0,0.0]
@@ -125,13 +131,17 @@ class Env:
         self.num_experiments = 20
         self.d_robots = 5
 
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
-
     def reset(self, model_state = None, id_bots = 999):
+
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Assign next positions and reset the positions of robots and targets
+        '''
+
+        # ========================================================================= #
+	    #                          1. TARGET UPDATE                                 #
+	    # ========================================================================= #
         
         self.is_collided = False
         tb3_0 = -1
@@ -191,7 +201,9 @@ class Env:
         
 
 
-        #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
+        # ========================================================================= #
+	    #                                 2. RESET                                  #
+	    # ========================================================================= #
         
        # Reset Turtlebot 1 position
         state_msg = ModelState()
@@ -238,56 +250,6 @@ class Env:
         state_msg4.pose.orientation.y = quat4[1]
         state_msg4.pose.orientation.z = quat4[2]
         state_msg4.pose.orientation.w = quat4[3]
-        
-        # # Reset Turtlebot 1 position
-        # state_msg = ModelState()
-        # state_msg.model_name = 'tb3_0'
-        # state_msg.pose.position.x = -2.5
-        # state_msg.pose.position.y = 0.0 
-        # state_msg.pose.position.z = 0.0
-        # state_msg.pose.orientation.x = 0
-        # state_msg.pose.orientation.y = 0
-        # state_msg.pose.orientation.z = 0
-        # state_msg.pose.orientation.w = 0
-
-        # # Reset Turtlebot 2 Position
-        # state_msg2 = ModelState()    
-        # state_msg2.model_name = 'tb3_1' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        # state_msg2.pose.position.x = 2.5
-        # state_msg2.pose.position.y = 0.0
-        # state_msg2.pose.position.z = 0.0
-        # state_msg2.pose.orientation.x = 0
-        # state_msg2.pose.orientation.y = 0
-        # state_msg2.pose.orientation.z = -0.2
-        # state_msg2.pose.orientation.w = 0
-
-        # # Reset Turtlebot 3 Position
-
-        # state_msg3 = ModelState()    
-        # state_msg3.model_name = 'tb3_2' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        # state_msg3.pose.position.x = 0.0
-        # state_msg3.pose.position.y = -2.5
-        # state_msg3.pose.position.z = 0.0
-        # state_msg3.pose.orientation.x = 0
-        # state_msg3.pose.orientation.y = 0
-        # state_msg3.pose.orientation.z = 0.7071
-        # state_msg3.pose.orientation.w = 0.7071
-
-        # # Reset Turtlebot 4 Position
-
-        # state_msg4 = ModelState()    
-        # state_msg4.model_name = 'tb3_3' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        # state_msg4.pose.position.x = 0.0
-        # state_msg4.pose.position.y = 2.5
-        # state_msg4.pose.position.z = 0.0
-        # state_msg4.pose.orientation.x = 0
-        # state_msg4.pose.orientation.y = 0
-        # state_msg4.pose.orientation.z = -0.7071
-        # state_msg4.pose.orientation.w = 0.7071
-
-        # Reset Pheromone Grid
-        #
-        #
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -350,6 +312,10 @@ class Env:
         return t
     
     def posAngle(self, model_state):
+        '''
+        Get model_state from rostopic and
+        return (1) x position of robots (2) y position of robots (3) angle of the robots (4) id of the robots
+        '''
         pose = [None]*self.num_robots
         ori = [None]*self.num_robots
         x = [None]*self.num_robots
@@ -399,37 +365,32 @@ class Env:
         return tmp
 
     def step(self, actions, time_step=0.1):
-        # 20201010 How can I make the action input results in the change in state?
-        # I read tensorswarm, and it takes request and go one step.
-        # It waited until m_loop_done is True - at the end of the post step.
-        print("Actions: {}".format(actions))
+        '''
+        Take a step with the given action from DRL in the Environment
+        0. Initialisation
+        1. Move Robot for given time step
+        2. Read robot pose
+        3. Calculation of distances
+        4. Read Pheromone
+        5. Reward Assignment
+        6. Reset
+        7. Other Debugging Related
+        '''
         # 0. Initiliasation
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
         
-        #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
-        #twists_rsc = [Twist()]*self.num_robots
-        #print("twists: {}".format(twists))
+
         # rescaling the action
         for i in range(len(twists)):
             twists[i].linear.x = (twists[i].linear.x+1) * 1/2  # only forward motion
             twists[i].angular.z = twists[i].angular.z
-        #print("twists UP: {}".format(twists))
         
-        #print("twists: {}".format(twists))
-        #print("twists_rsc: {}".format(twists_rsc))
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        #print("len twists: {}".format(len(twists)))
-        #print("len twists_rsc: {}".format(len(twists_rsc)))
-        #linear_x_rsc = [i.linear.x for i in twists_rsc]
-        #angular_z_rsc = [i.angular.z for i in twists_rsc]
         dones = self.dones
-        #print("Linear: {}, Angular: {}".format(linear_x, angular_z))
-        #print("Linear_rsc: {}, Angular_rsc: {}".format(linear_x_rsc, angular_z_rsc))
-        
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -455,7 +416,7 @@ class Env:
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
-        #print("Model State: {}".format(model_state))
+
         x, y, theta, idx = self.posAngle(model_state)
         self.x_prev = x
         self.y_prev = y
@@ -482,14 +443,11 @@ class Env:
         
         # Concatenating the state array
         state_arr = np.asarray(phero_grad)
-        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, phero_now))
-        print("shape_state: {}".format(state_arr.shape))
         state_arr = np.hstack((state_arr, np.asarray(distance_to_goals).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(linear_x).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angular_z).reshape(self.num_robots,1)))
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
-        print("shape_state: {}".format(state_arr.shape))
 
         # 5. State reshape
         states = state_arr.reshape(self.num_robots, self.state_num)
@@ -517,14 +475,10 @@ class Env:
             else:
                 distance_rewards[i] = 0.0
             distance_rewards[i] *= time_step_factor
-        # for i in range(self.num_robots):
-        #     if dones[i] == True:
-        #         distance_rewards[i] = 0.0
         
         self.just_reset == False
         
         ## 6.2. Pheromone reward (The higher pheromone, the lower reward)
-        #phero_sums = [np.sum(phero_val) for phero_val in phero_vals]
         phero_rewards = [0.0, 0.0, 0.0, 0.0]#[-phero_sum*2 for phero_sum in phero_sums] # max phero_r: 0, min phero_r: -9
         
         ## 6.3. Goal reward
@@ -564,9 +518,8 @@ class Env:
             for j in range(self.num_robots):
                 if j != i:
                     distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2) # Python 
-        print("dto: {}".format(distance_to_obstacle))
-
         collision_rewards = [0.0]*self.num_robots
+
         for i in range(self.num_robots):
             if any([dis <= 0.32 for dis in distance_btw_robots[i]]) == True:
                 print("Collision! Robot: {}".format(i))

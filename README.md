@@ -28,7 +28,9 @@ Step 2-3: If you want to run trained [DRL-based controller], run the script endi
 rosrun turtlebot3_pheromone "your_DRL-based-controller_eval.py"
 rosrun turtlebot3_pheromone phero_network_exp1_eval.py (Running trained DRL-based controller for exp1)
 
+## Important to know
 
+Before you run the scripts, please check the logging directory path in the scripts. You might need to change the logging or pheromone map import path to run the scripts.
 
 # Other usages
 
