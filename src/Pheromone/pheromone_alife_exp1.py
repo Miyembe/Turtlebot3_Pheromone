@@ -34,7 +34,6 @@ class Node():
         
         # Services
         self.srv_inj = rospy.Service('phero_inj', PheroInj, self.injAssign) # Used in continuous controller 
-        self.srv_goal = rospy.Service('phero_goal', PheroGoal, self.nextGoal) # Used in phero_controller (discrete action)
         self.srv_reset = rospy.Service('phero_reset', PheroReset, self.serviceReset)
         self.is_service_requested = False
         self.theta = 0 
@@ -49,28 +48,11 @@ class Node():
         self.pheromone.isEvaporation = False
         self.startTime = time.time()
 
-        # PosToIndex for pheromone circle
-        # x_2, y_2 = self.posToIndex(2,2)
-        # x_n2, y_n2 = self.posToIndex(-2,-2)
-        # x_1p4, y_1p4 = self.posToIndex(1.4, 1.4)
-        # x_n1p4, y_n1p4 = self.posToIndex(-1.4, -1.4)
-        # x_0, y_0 = self.posToIndex(0,0)
-
-        # Pheromone Initilaisation
-        # self.pheromone.circle(x_2, y_0, 1, 0.7)
-        # self.pheromone.circle(x_n2, y_0, 1, 0.7)
-        # self.pheromone.circle(x_0, y_2, 1, 0.7)
-        # self.pheromone.circle(x_0, y_n2, 1, 0.7)
-        # self.pheromone.circle(x_1p4, y_1p4, 1, 0.5)
-        # self.pheromone.circle(x_1p4, y_n1p4, 1, 0.5)
-        # self.pheromone.circle(x_n1p4, y_n1p4, 1, 0.5)
-        # self.pheromone.circle(x_n1p4, y_1p4, 1, 0.5)
-
         
 
     def posToIndex(self, x, y):
         '''
-        Convert 2D coordinates (x, y) into the matrix index (x_index, y_index) 
+        Convert 2D coordinates (x, y) into the pheromone matrix index (x_index, y_index) 
         '''
         phero = self.pheromone
         # Read pheromone value at the robot position
@@ -104,13 +86,14 @@ class Node():
     def pheroCallback(self, message, cargs):
         
         # Reading from arguments
-        pose = message.pose[-1]
-        twist = message.twist[-1]
+        pose = message.pose[-2]
+        twist = message.twist[-2]
         pos = pose.position
         ori = pose.orientation
         phero = cargs
         x = pos.x
         y = pos.y
+        x_idx, y_idx = self.posToIndex(x, y)
 
         angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
         if angles[2] < 0:
@@ -126,37 +109,22 @@ class Node():
         Pheromone Value Reading
         '''
 
-        '''2 pheromone values'''
-        # Add two wheel position
-        # wheel_distance = 0.2
-        # pos_l = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) - sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        # pos_r = np.array([x+(cos(pi/2)*cos(self.theta)*(wheel_distance/2) + sin(pi/2)*sin(self.theta)*(wheel_distance/2)), y+(-sin(pi/2)*cos(self.theta)*(wheel_distance/2) + cos(pi/2)*sin(self.theta)*(wheel_distance/2))])
-        
-        # x_index, y_index = self.posToIndex(pos.x, pos.y)
-        # x_l_index, y_l_index = self.posToIndex(pos_l[0], pos_l[1])
-        # x_r_index, y_r_index = self.posToIndex(pos_r[0], pos_r[1]) 
-
-        # # Assign pheromone values from two positions and publish it
-        # phero_val = Float32MultiArray()
-        # phero_val.data = [phero.getPhero(x_l_index, y_l_index), phero.getPhero(x_r_index, y_r_index)]
-        # self.pub_phero.publish(phero_val)
-
         ''' 2 values from the antennae'''
-        x_index, y_index = self.posToIndex(x, y)
+        # Define antennae parameters
         theta = self.theta
         a_angle = 0.5
         a_len = 0.45
+
+        # Get pheromone values and define antennae tips positions
         phero_val = Float32MultiArray()
         antennae_pos_l = [cos(theta)*cos(a_angle)*a_len-sin(theta)*sin(a_angle)*a_len + pos.x, sin(theta)*cos(a_angle)*a_len+cos(theta)*sin(a_angle)*a_len + pos.y] # [cos(0.3)*a_len, sin(0.3)*a_len]
         antennae_pos_r = [cos(theta)*cos(-a_angle)*a_len-sin(theta)*sin(-a_angle)*a_len + pos.x, sin(theta)*cos(-a_angle)*a_len+cos(theta)*sin(-a_angle)*a_len + pos.y]
         a_l_index_x, a_l_index_y = self.posToIndex(antennae_pos_l[0], antennae_pos_l[1])
         a_r_index_x, a_r_index_y = self.posToIndex(antennae_pos_r[0], antennae_pos_r[1])
-        #print("Left Antenna : ({}, {})".format(a_l_index_x, a_l_index_y))
-        #print("Right Antenna : ({}, {})".format(a_r_index_x, a_r_index_y))
 
+        # Get the pheromone values at the position of antennae and publish
         phero_val.data.append(self.pheromone.getPhero(a_l_index_x, a_l_index_y))
         phero_val.data.append(self.pheromone.getPhero(a_r_index_x, a_r_index_y))
-        print("phero_val: {}".format(phero_val.data))
         self.pub_phero.publish(phero_val)
 
 
@@ -180,7 +148,7 @@ class Node():
         
         ''' Pheromone injection (uncomment it when injection is needed) '''
         # if self.is_phero_inj is True:
-        #     phero.injection(x_index, y_index, 0.2, 5, self.phero_max)
+        #     phero.gradInjection(x_idx, y_idx, 1, 0.6, 0.7, self.phero_max)
 
         # ========================================================================= #
 	    #                           Pheromone Update                                #
@@ -202,10 +170,10 @@ class Node():
         # if time_check - self.startTime >= 20 and self.is_saved is False:
         #     self.pheromone.save("simple_collision_diffused3")
         #     self.is_saved = True
-        
+        #print("x, y: ({}, {})".format(x, y))
         # Save the pheromone when robot return home.
-        # distance_to_origin = sqrt(x**2+y**2)
-        # if self.is_saved is False and distance_to_origin < 0.05:
+        # distance_to_origin = sqrt((x-4)**2+y**2)
+        # if self.is_saved is False and distance_to_origin < 0.3:
         #     self.pheromone.save("foraging_static")
         #     self.is_saved = True
         #     self.is_phero_inj = False
@@ -228,7 +196,7 @@ class Node():
         # 2. When reset is requested.
         if self.is_reset == True:
             try:
-                self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
+                self.pheromone.load("foraging_static") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
@@ -250,57 +218,6 @@ class Node():
         is_reset = True
         return PheroResetResponse(is_reset)
 
-    def nextGoal(self, req):
-
-        # Turn off pheromone injection
-        self.is_phero_inj = False
-        
-        # Convert the robot position to index for the pheromone matrix
-        x = req.x
-        y = req.y
-        x_index, y_index = self.posToIndex(x, y)
-        
-        # read the 9 nearby values and choose the cell with maximum value
-        max_phero = self.pheromone.getPhero(x_index, y_index)
-        phero_index = np.array([0,0])
-        phero_value = np.zeros((3,3))
-        rand_index = 0
-
-        ## Get the indices that contains maximum pheromone
-        for i in range(3):
-            for j in range(3):
-                if self.pheromone.getPhero(x_index+i-1, y_index+j-1) > max_phero: # TODO: Randomly select the cell if the values are equal
-                    phero_index = np.array([i-1, j-1])
-                    max_phero = self.pheromone.getPhero(x_index+i-1, y_index+j-1)
-                    print("Set new max")
-                elif self.pheromone.getPhero(x_index+i-1, y_index+j-1) == max_phero:
-                    phero_index = np.vstack((phero_index, [i-1, j-1]))
-                phero_value[i,j] = self.pheromone.getPhero(x_index+i-1, y_index+j-1)
-                print("At the point ({}, {}), the pheromone value is {}".format(i,j,self.pheromone.getPhero(x_index+i-1, y_index+j-1)))
-                    #print("Append phero val")
-        print("Phero_index: {}".format(phero_index))
-        print("Phero_value: {}".format(phero_value))
-
-        # Choose the index as a next goal from the array
-        ## Check the front cells (highest priority)
-        # if self.theta > (7/4) * pi or self.theta < (1/4) * pi:
-        #     for x in phero_index:
-        #         if x is np.array([1,0]) or x is np.array([1,1]) or x is np.array([1,2]):
-        #             np.append(final_index, x, axis=0)
-        rand_index = np.random.choice(phero_index.shape[0], 1)
-        final_index = phero_index[rand_index]
-        next_x_index = x_index + final_index[0,0]
-        next_y_index = y_index + final_index[0,1]
-
-        # Reconvert index values into position. 
-        next_x, next_y = self.indexToPos(next_x_index, next_y_index)
-        print("Pheromone value of goal: {}".format(self.pheromone.getPhero(next_x_index, next_y_index)))
-        
-        return PheroGoalResponse(next_x, next_y) 
-
-    
-
-
 class Pheromone():
 
     # ========================================================================= #
@@ -320,7 +237,7 @@ class Pheromone():
 
     def __init__(self, evaporation, diffusion):
         self.resolution = 10 # grid cell size = 1 m / resolution
-        self.size = 10 # m
+        self.size = 12 # m
         self.num_cell = self.resolution * self.size + 1
         if self.num_cell % 2 == 0:
             raise Exception("Number of cell is even. It needs to be an odd number")
@@ -353,6 +270,19 @@ class Pheromone():
                     self.grid[x-(size-1)/2+i, y-(size-1)/2+j] += value
                     if self.grid[x-(size-1)/2+i, y-(size-1)/2+j] >= max:
                         self.grid[x-(size-1)/2+i, y-(size-1)/2+j] = max
+            self.injection_timer = time_cur
+
+    def gradInjection(self, x, y, value, min_val, rad, maxp):
+        time_cur = time.clock()
+        if time_cur-self.injection_timer > 0.1:
+            radius = int(rad*self.resolution)
+            #print("Radius: {}".format(radius))
+            for i in range(-radius, radius):
+                for j in range(-radius, radius):
+                    if sqrt(i**2+j**2) <= radius:
+                        self.grid[x+i, y+j] = value - value*(sqrt(i**2+j**2))/radius + min_val
+                        if self.grid[x+i, y+j] >= maxp:
+                            self.grid[x+i, y+j] = maxp
             self.injection_timer = time_cur
 
     def circle(self, x, y, value, radius):
@@ -389,12 +319,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

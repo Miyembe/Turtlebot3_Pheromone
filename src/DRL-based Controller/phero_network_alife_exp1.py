@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp2
+import phero_turtlebot_alife_exp1
 import numpy as np
 import os
 import sys
@@ -14,7 +14,7 @@ import multiprocessing
 # from keras.layers import Dense, Dropout, Input, merge
 # from keras.layers.merge import Add, Concatenate
 # from keras.optimizers import Adam
-import keras.backend as K
+# import keras.backend as K
 import tensorflow as tf
 import random
 from collections import deque
@@ -58,10 +58,9 @@ class PheroTurtlebotPolicy(object):
         
         # Assign action as Gaussian Distribution
         self.pdtype = make_pdtype(ac_space)
-        self.num_obs = 8
         #print("action_space: {}".format(ac_space))
         with tf.variable_scope("model", reuse=reuse):
-            phero_values = tf.placeholder(shape=(None, self.num_obs), dtype=tf.float32, name="phero_values")
+            phero_values = tf.placeholder(shape=(None, 6), dtype=tf.float32, name="phero_values")
             #velocities = tf.placeholder(shape=(None, 2), dtype=tf.float32, name="velocities")
 
             # Actor neural net
@@ -87,39 +86,22 @@ class PheroTurtlebotPolicy(object):
             '''
             Generate action & value & log probability by inputting one observation into the policy neural net
             '''
-            phero = [o for o in ob]
-
-            # lb = [o["laser"] for o in ob]
-            # rb = [o["rel_goal"] for o in ob]
-            # vb = [o["velocities"] for o in ob]
-
+            phero = ob 
             a, v, neglogp = sess.run([a0, vf, neglogp0], {self.phero: phero})
-            # Action clipping (normalising action within the range (-1, 1) for better training)
-            # The network will learn what is happening as the training goes.
-            # for i in range(a.shape[1]):
-            #     a[0][i] = min(1.0, max(-1.0, a[0][i]))
             return a, v, self.initial_state, neglogp
 
         def value(ob, *_args, **_kwargs):
-            phero = [o for o in ob]
-            # lb = [o["laser"] for o in ob]
-            # rb = [o["rel_goal"] for o in ob]
-            # vb = [o["velocities"] for o in ob]
+            phero = ob
             return sess.run(vf, {self.phero: phero})
 
         self.step = step
         self.value = value
 
     def net(self, phero):
-        '''
-        Policy Network 
-        '''
-        # 20201009 Simple neural net. Needs to be modified for better output.
-        net = tf.layers.dense(phero, 256, activation=tf.nn.relu)
-        net = tf.layers.dense(net, 256, activation=tf.nn.relu)
+        # Network Architecture
+        net = tf.layers.dense(phero, 128, activation=tf.nn.relu)
         net = tf.layers.dense(net, 128, activation=tf.nn.relu)
-        #net = tf.layers.dense(net, 1, activation=tf.nn.relu)
-
+        net = tf.layers.dense(net, 64, activation=tf.nn.relu)
         return net
 
 # Class of Actor Critic Model for PPO
@@ -142,12 +124,14 @@ class Model(object):
 
         # Create two models
         ## Actor model for sampling
-        print("Pre Model")
         act_model = policy(sess, ob_space, ac_space, nbatch_act, 1, reuse=False, deterministic=deterministic)
         ## Train model for training
         train_model = policy(sess, ob_space, ac_space, nbatch_train, nsteps, reuse=True, deterministic=deterministic)
-        print("After Model")
-        '''Create Placeholders'''
+
+        ##################################################
+        ##             Create Placeholders              ##
+        ##################################################
+
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
         R = tf.placeholder(tf.float32, [None])
@@ -166,18 +150,23 @@ class Model(object):
         # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy
         entropy = tf.reduce_mean(train_model.pd.entropy())
 
+        ##################################################
+        ##               LOSS CALCULATION               ##
+        ##################################################
 
-        ''' LOSS CALCULATION '''
         # Total loss = Policy gradient loss (clipped) - entropy * entropy coefficient + Value coefficient * value loss
         
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
         vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
+
         # Unclipped loss
         vf_losses1 = tf.square(vpred - R)
+
         # Clipped loss
         vf_losses2 = tf.square(vpredclipped - R)
+
         # Average them
         vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2))
         
@@ -185,6 +174,7 @@ class Model(object):
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         pg_losses = -ADV * ratio
         pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
+
         # Final PG loss
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
@@ -193,15 +183,20 @@ class Model(object):
         # Calculate total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
-        ''' UPDATE THE PARAMETERS USING LOSS '''
+        ##################################################
+        ##       UPDATE THE PARAMETERS USING LOSS       ##
+        ##################################################
+
         # 1. Get the model parameters
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
+
         # 2. Calculate the gradients - g from L (L_clip + L_vf + L_s)(theta)
         grads = tf.gradients(loss, params)
         if max_grad_norm is not None:
             grads, _grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
         grads = list(zip(grads, params))
+
         # 3. Build our trainer
         trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
         _train = trainer.apply_gradients(grads)
@@ -213,28 +208,13 @@ class Model(object):
             return np.reshape(arr, (len(arr)*len(arr[0])), 'F')
 
         # Reshaping the state arrays for training (to feed in the neural network)
-        # 20201009 needs to rewrite for Phero TUrtlebot use
+
         def reshape(ids, obs, returns, masks, actions, values, neglogpacs):
-            
-            
-            # ib = np.asarray([[o["id"] for o in iobs] for iobs in obs])
-            # lb = np.asarray([[o["laser"] for o in iobs] for iobs in obs])
-            # rb = np.asarray([[o["rel_goal"] for o in iobs] for iobs in obs])
-            # vb = np.asarray([[o["velocities"] for o in iobs] for iobs in obs])
-
-            #lb = np.reshape(lb, (len(lb)*len(lb[0]), 512, 3), 'F')
-
+            # Reshaping values
             pb = reshape2d(obs)
-            #rb = reshape2d(rb)
-            #vb = reshape2d(vb)
-
             ids = reshape1d(ids)
-
             actions = reshape2d(actions)
-
             advs = returns - values
-            #advs = (advs - advs.mean()) / (advs.std() + 1e-8)
-
             advs = reshape1d(advs)
             returns = reshape1d(returns)
             neglogpacs = reshape1d(neglogpacs)
@@ -244,19 +224,16 @@ class Model(object):
 
         
         def train(lr, cliprange, ids, obs, returns, masks, actions, values, neglogpacs, states=None):
-            '''
-            Put values into placeholders and train the policy neural network
-            '''
+            # Put values into placeholders and train the policy neural network
             pb, advs, returns, masks, actions, values, neglogpacs = reshape(ids, obs, returns, masks, actions, values, neglogpacs)
-            
-            #print("pb: {}, advs: {}, returns: {}, masks: {}, actions: {}, values: {}, neglogpacs: {}".format(pb.shape, advs.shape, returns.shape, masks.shape, actions.shape, values.shape, neglogpacs.shape))
+
             td_map = {train_model.phero:pb, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
-            #print("here?") 
+   
             return sess.run(
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
                 td_map
@@ -281,7 +258,6 @@ class Model(object):
         self.saver = tf.train.Saver()
         self.save = save
         self.restore = restore
-        self.num_obs = act_model.num_obs
         tf.global_variables_initializer().run(session=sess) #pylint: disable=E1101
     
     def get_session(self, config=None):
@@ -309,7 +285,7 @@ class Model(object):
 
 class Runner(AbstractEnvRunner):
     '''
-    Runner class used to make samples using policy for T timesteps
+    Runner class used to make samples using policy network for T timesteps
     This is the first part of PPO algorithm.
     '''
 
@@ -319,7 +295,6 @@ class Runner(AbstractEnvRunner):
         self.gamma = gamma
         self.ids, self.obs = self.env.reset()
         self.reset_counter = 0
-        #self.env.set_model(self.model)
 
     def sf01(self, arr):
         """
@@ -328,36 +303,37 @@ class Runner(AbstractEnvRunner):
         return arr
         s = arr.shape
         return arr.swapaxes(0, 1).reshape(s[0] * s[1], *s[2:])
+
     def run(self):
-        # 20201009 ID might not be needed for single robot learning
-        # 20201017 Resize all the array as single row)
         mb_ids, mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
-        if self.reset_counter > 0:
+        if self.reset_counter > 1:   
             self.ids, self.obs = self.env.reset()
-            self.reset_counter = 0
-        else: 
+            self.reset_counter = 0 
+        else:
             self.reset_counter += 1
+        self.obs = np.asarray(self.obs).reshape(1, self.env.state_num)
         self.dones = [False] * self.env.num_robots
         for _ in range(self.nsteps):
-            #print self.obs
-            mb_ids.append(self.ids)
+
+            # Compute step with the network given the observation inputs.
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+
+            # Store for training
+            mb_ids.append(self.ids)
             mb_obs.append(self.obs)
             mb_actions.append(actions)
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
 
-            # 20201009 Need to modify these inputs
-            self.ids, self.obs, rewards, self.dones, infos = self.env.step(actions, 0.1)
+            self.ids, self.obs, rewards, self.dones, infos = self.env.step(0.1, actions[0][0], actions[0][1])
+        
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo: epinfos.append(maybeepinfo)
             mb_rewards.append(rewards)
-        #batch of steps to batch of rollouts
-        #mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_ids = np.asarray(mb_ids)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
@@ -365,27 +341,23 @@ class Runner(AbstractEnvRunner):
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs, self.states, self.dones)
+
         #discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
-        for i in range(self.env.num_robots):
-            lastgaelam = 0
-            for t in reversed(range(self.nsteps)):
-                if t == self.nsteps - 1:
-                    nextnonterminal = 1.0 - self.dones[i]
-                    nextvalues = last_values[i]
-                    #print("nextvalues: {}".format(nextvalues))
-                else:
-                    nextnonterminal = 1.0 - mb_dones[t+1][i]
-                    nextvalues = mb_values[t+1][i]
-                    #print("nextvalues: {}".format(nextvalues))
-                delta = mb_rewards[t][i] + self.gamma * nextvalues * nextnonterminal - mb_values[t][i]
-                #print("delta: {}".format(delta))
-                #print("mb_rewards: {}, mb_values: {}, self.gamma: {}, nextvalues: {}, nextnonterminal: {}".format(mb_rewards[t][i], mb_values[t][i], self.gamma, nextvalues, nextnonterminal))
-                mb_advs[t][i] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
-            mb_returns = mb_advs + mb_values
+        lastgaelam = 0
+        for t in reversed(range(self.nsteps)):
+            if t == self.nsteps - 1:
+                nextnonterminal = 1.0 #- self.dones
+                nextvalues = last_values
+            else:
+                nextnonterminal = 1.0 #- mb_dones[t+1]
+                nextvalues = mb_values[t+1]
+            delta = mb_rewards[t] + self.gamma * nextvalues * nextnonterminal - mb_values[t]
+            mb_advs[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
+        mb_returns = mb_advs + mb_values
         return mb_ids, mb_obs, self.sf01(mb_returns), self.sf01(mb_dones), self.sf01(mb_actions), self.sf01(mb_values), self.sf01(mb_neglogpacs), \
-                mb_states, epinfos, mb_rewards
+                mb_states, epinfos
 
 class PPO:
     '''
@@ -428,10 +400,10 @@ class PPO:
     def learn(self):
         # For logging
         time_str = time.strftime("%Y%m%d-%H%M%S")
-        logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+        logger_ins = logger.Logger('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
         board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 
-        # reassigning the members of class into this function for simplicity
+        # Reassigning the members of class into this function for simplicity
         total_timesteps = int(self.total_timesteps)
         nenvs = 1
         #nenvs = env.num_envs # for multiple instance training
@@ -450,17 +422,12 @@ class PPO:
         lr = self.lr
         cliprange = self.cliprange
         deterministic = self.deterministic
+        step_reward = [[0.0, 0.0]]
 
         # Define a function to make Actor-Critic Model 
         make_model = lambda : Model(policy=self.policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
                                     nsteps=self.nsteps, ent_coef=self.ent_coef, vf_coef=self.vf_coef,
                                     max_grad_norm=self.max_grad_norm, deterministic=self.deterministic)
-        
-        # Save function 
-        # if save_interval and logger_ins.get_dir():
-        #     import cloudpickle
-        #     with open(osp.join(logger_ins.get_dir(), 'make_model.pkl'), 'wb') as fh:
-        #         fh.write(cloudpickle.dumps(make_model))
 
         # Make a model
         model = make_model()
@@ -489,7 +456,6 @@ class PPO:
         3. Optimise Loss w.r.t weights of policy, with K epochs and minibatch size M < N (# of actors) * T (timesteps)
         4. Update weights (in Model class)
         '''
-        step_reward = np.array([0, 0]).reshape(1,2)
         # In every update, one loop of PPO algorithm is executed
         for update in range(1, nupdates+1):
             
@@ -502,7 +468,7 @@ class PPO:
             cliprangenow = cliprange(frac)
 
             # 1. Run policy and get samples for nsteps
-            ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos, rewards = runner.run()
+            ids, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()
             epinfobuf.extend(epinfos)
             mblossvals = []
 
@@ -513,14 +479,12 @@ class PPO:
             # 3. Optimise Loss w.r.t weights of policy, with K epochs and minibatch size M < N (# of actors) * T (timesteps)
             if states is None: # nonrecurrent version
                 inds = np.arange(nbatch)
-                # Update weights using optimiser by noptepochsprint("ids {}, obs {}, returns {}, masks {}, actions {}, values {}, neglogpacs {}, states {}, epinfos {}".format(type(ids), type(obs), type(returns), type(masks), type(actions), type(values), type(neglogpacs), type(states), type(epinfos)))
+                # Update weights using optimiser by noptepochs
                 for _ in range(noptepochs):
-                    # In each epoch, update weights using samples every minibatch in the total batch
-                    # epoch = m(32)*minibatch(4)
-                
                     for start in range(0, nbatch, nbatch_train):
                         end = start + nbatch_train
                         mbinds = inds[start:end]
+                        returns_np = np.asarray(returns[mbinds])
                         # 4. Update weights
                         mblossvals.append(model.train(lrnow, cliprangenow, ids[mbinds], [obs[i] for i in mbinds], returns[mbinds],
                                         masks[mbinds], actions[mbinds], values[mbinds],
@@ -538,6 +502,7 @@ class PPO:
                         end = start + envsperbatch
                         mbenvinds = envinds[start:end]
                         mbflatinds = flatinds[mbenvinds].ravel()
+                        print(mbflatinds)
                         slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                         mbstates = states[mbenvinds]
                         mblossvals.append(model.train(lrnow, cliprangenow,
@@ -550,9 +515,10 @@ class PPO:
             tnow = time.time()
             fps = int(nbatch / (tnow - tstart))
             
-            '''
-            Logging and saving model & weights
-            '''
+            ##################################################
+            ##      Logging and saving model & weights      ##
+            ##################################################
+
             if update % log_interval == 0 or update == 1:
                 #ev = explained_variance(values, returns)
                 logger_ins.logkv("serial_timesteps", update*nsteps)
@@ -566,7 +532,6 @@ class PPO:
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     logger_ins.logkv(lossname, lossval)
                 logger_ins.dumpkvs()
-                
                 for (lossval, lossname) in zip(lossvals, model.loss_names):
                     board_logger.log_scalar(lossname, lossval, update)
                 board_logger.log_scalar("eprewmean", self.safemean([epinfo['r'] for epinfo in epinfobuf]), update)
@@ -575,8 +540,7 @@ class PPO:
                 reward_arr = np.asarray([epinfo['r'] for epinfo in epinfobuf])
                 #reward_new = np.delete(reward_arr, np.where(reward_arr == 0.0))
                 step_reward = np.append(step_reward,[[update, self.safemean([reward for reward in reward_arr])]], axis=0)
-                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
-
+                sio.savemat('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
             if save_interval and (update % save_interval == 0 or update == 1) and logger_ins.get_dir():
                 checkdir = osp.join(logger_ins.get_dir(), 'checkpoints', '{}'.format(self.time_str))
                 if not os.path.isdir(checkdir):
@@ -592,7 +556,7 @@ class PPO:
        return np.nan if len(xs) == 0 else np.mean(xs)
 
 def main():
-    env = phero_turtlebot_exp2.Env()
+    env = phero_turtlebot_alife_exp1.Env()
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,
