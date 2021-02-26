@@ -535,11 +535,7 @@ class Env:
         reset_time = step_timer - self.reset_timer
         
         # Log Positions
-<<<<<<< HEAD
-        if time.time() - self.log_timer > 0.1:
-=======
         if time.time() - self.log_timer > 0.5 and self.is_traj == True:
->>>>>>> bb9251dc9d249267f1f0bb2cdae7909166d74a7b
             for i in range(self.num_robots):
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
