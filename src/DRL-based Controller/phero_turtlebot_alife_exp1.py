@@ -102,7 +102,7 @@ class Env:
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Set target position
-        self.target_x = 3.0
+        self.target_x = 3.0 
         self.target_y = 0.0
         self.target_index = 0
         self.radius = 1
