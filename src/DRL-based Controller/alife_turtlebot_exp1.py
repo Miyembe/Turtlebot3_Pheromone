@@ -102,11 +102,11 @@ class Env:
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Set target position
-        self.target_x = 3.0
+        self.target_x = 4.0
         self.target_y = 0.0
         self.target_index = 0
-        self.radius = 1
-        self.num_experiments = 20
+        self.radius = 4
+        self.num_experiments = 4
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
@@ -120,9 +120,18 @@ class Env:
 
         # Miscellanous
         self.ep_len_counter = 0
-        self.dis_rwd_norm = 12
+        self.dis_rwd_norm = 7
         self.grad_sensitivity = 20
         self.theta = 0
+
+        # Timer
+        self.stay_duration = 0.0
+        self.start_time = 0.0
+        self.cur_time = 0.0
+        self.is_stay = False
+
+        # Centre positions
+        self.centers = [[2, 0],[-2,0],[0,2],[0,-2]]
 
     def reset(self):
         '''
@@ -139,8 +148,8 @@ class Env:
 
         angle_target = self.target_index*2*pi/self.num_experiments        
 
-        self.pos_x = self.radius*cos(angle_target)
-        self.pos_y = self.radius*sin(angle_target)
+        self.target_x = self.radius*cos(angle_target)
+        self.target_y = self.radius*sin(angle_target)
         
         if self.target_index < self.num_experiments-1:
             self.target_index += 1
@@ -148,7 +157,7 @@ class Env:
             self.target_index = 0
 
         self.theta = angle_target
-        quat = quaternion_from_euler(0,0,self.theta + pi)
+        quat = quaternion_from_euler(0,0,self.theta)
         
 
         # ========================================================================= #
@@ -158,31 +167,24 @@ class Env:
         # Reset Turtlebot position
         state_msg = ModelState()
         state_msg.model_name = 'turtlebot3_waffle_pi'
-        state_msg.pose.position.x = -0.5
-        state_msg.pose.position.y = 0.0
+        state_msg.pose.position.x = 0.0
+        state_msg.pose.position.y = 0.0 
         state_msg.pose.position.z = 0.0
-        state_msg.pose.orientation.x = 0
-        state_msg.pose.orientation.y = 0
-        state_msg.pose.orientation.z = 0
-        state_msg.pose.orientation.w = 0
-        # state_msg.pose.position.x = self.pos_x
-        # state_msg.pose.position.y = self.pos_y
-        # state_msg.pose.position.z = 0.0
-        # state_msg.pose.orientation.x = quat[0]
-        # state_msg.pose.orientation.y = quat[1]
-        # state_msg.pose.orientation.z = quat[2]
-        # state_msg.pose.orientation.w = quat[3]
+        state_msg.pose.orientation.x = quat[0]
+        state_msg.pose.orientation.y = quat[1]
+        state_msg.pose.orientation.z = quat[2]
+        state_msg.pose.orientation.w = quat[3]
 
-        # Reset Target Position
-        state_target_msg = ModelState()    
-        state_target_msg.model_name = 'unit_sphere' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_target_msg.pose.position.x = self.target_x
-        state_target_msg.pose.position.y = self.target_y
-        state_target_msg.pose.position.z = 0.0
-        state_target_msg.pose.orientation.x = 0
-        state_target_msg.pose.orientation.y = 0
-        state_target_msg.pose.orientation.z = -0.2
-        state_target_msg.pose.orientation.w = 0
+        # # Reset Target Position
+        # state_target_msg = ModelState()    
+        # state_target_msg.model_name = 'unit_sphere_0_0' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
+        # state_target_msg.pose.position.x = self.target_x
+        # state_target_msg.pose.position.y = self.target_y
+        # state_target_msg.pose.position.z = 0.0
+        # state_target_msg.pose.orientation.x = 0
+        # state_target_msg.pose.orientation.y = 0
+        # state_target_msg.pose.orientation.z = -0.2
+        # state_target_msg.pose.orientation.w = 0
 
         rospy.wait_for_service('gazebo/reset_simulation')
 
@@ -190,7 +192,7 @@ class Env:
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
             resp = set_state(state_msg)
-            resp_targ = set_state(state_target_msg)
+            #resp_targ = set_state(state_target_msg)
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
 
@@ -233,8 +235,8 @@ class Env:
         # rescaling the action
         linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
-        linear_x = (linear_x+1)*1/2
-        angular_z = min(pi/2, max(-pi/2, angular_z*0.6))
+        #linear_x = (linear_x+1)*1/2
+        angular_z = min(1, max(-1, angular_z*0.6))
         
 
         self.move_cmd.linear.x = linear_x
@@ -295,39 +297,51 @@ class Env:
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
         state = state_arr.reshape(1, self.state_num)
-        print("phero_grad: {}".format(phero_grad))
-        print("phero_now: {}".format(phero_now))
-        print("distance_to_goal: {}".format(distance_to_goal))
 
         # 5. Reward assignment
         ## 5.0. Initialisation of rewards
-        goal_reward = 0.0
-        time_penalty = 0.0
+        const_phero_rwd = 0.0
+        stay_phero_rwd = 0.0
+        time_pty = 0.0
         
-        ## 5.1. Distance Reward
-        # goal_progress = distance_to_goal_prv - distance_to_goal
-        # if goal_progress >= 0:
-        #     distance_reward = goal_progress * 1.2
-        # else:
-        #     distance_reward = goal_progress
+        ## 5.1. Constant Pheromone Reward
+        phero_sum = np.sum(phero_now)/2
+        phero_reward_coef = 1
+        const_phero_rwd = phero_sum * phero_reward_coef - 0.3
+
         
-        ## 5.2. Pheromone reward (The higher pheromone, the lower reward)
-        # phero_grad_sum = np.sum(phero_grad)
-        # phero_reward_coef = 1
-        # phero_reward = -phero_grad_sum * phero_reward_coef
-        phero_now_avg = np.average(phero_now)
-        if phero_now_avg > 0.05:
-            phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
+        ## 5.2. Stay Pheromone reward (The higher pheromone, the lower reward)
+        distance_to_centers = [sqrt((x-self.centers[i][0])**2+(y-self.centers[i][1])**2) for i in range(len(self.centers))]
+        print("distance_to_centers: {}".format(distance_to_centers))
+        close_to_centers = [True if i <= 1.0 else False for i in distance_to_centers]
+        if any(close_to_centers) and self.is_stay == False:
+            self.start_time = time.time()
+            self.is_stay = True
+            print("It is staying on the centre.")
+        elif any(close_to_centers) and self.is_stay == True:
+            self.cur_time = time.time()
         else:
-            phero_reward = 0.0
-        ## 5.3. Goal reward
-        if distance_to_goal <= 0.4:
-            goal_reward = 10.0
+            self.start_time = time.time()
+            self.cur_time = time.time()
+            self.is_stay = False
+        self.stay_duration = self.cur_time - self.start_time
+
+
+        if self.stay_duration >= 3:
+            stay_phero_rwd = 10
             done = True
             self.reset()
             time.sleep(1)
+        # phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
+    
+        # ## 5.3. Goal reward
+        # if distance_to_goal <= 0.4:
+        #     goal_reward = 100.0
+        #     done = True
+        #     self.reset()
+        #     time.sleep(1)
 
-        ## 5.4. Angular speed penalty
+        # ## 5.4. Angular speed penalty
         # angular_punish_reward = 0.0
         # if abs(angular_z) > 1.2:
         #     angular_punish_reward = -1.0
@@ -336,8 +350,8 @@ class Env:
         # linear_punish_reward = 0.0
         # if linear_x < 0.2:
         #     linear_punish_reward = -1.0
-        ## 5.6. Collision penalty
-        #   if it collides to walls, it gets penalty, sets done to true, and reset
+        # ## 5.6. Collision penalty
+        # #   if it collides to walls, it gets penalty, sets done to true, and reset
         # collision_reward = 0.0
         # obs_pos = [[2, 0],[-2,0],[0,2],[0,-2]]
         # dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
@@ -346,11 +360,9 @@ class Env:
         #         collision_reward = -150.0
         #         self.reset()
         #         time.sleep(0.5)
-        ## 5.7. Time Penalty
-        time_penalty = 0.0
 
         ## 5.7. Sum of Rewards
-        reward = goal_reward + time_penalty + phero_reward
+        reward = const_phero_rwd + stay_phero_rwd
         reward = np.asarray(reward).reshape(1)
 
         # 6. Reset
@@ -358,13 +370,12 @@ class Env:
         if distance_to_goal >= self.dis_rwd_norm:
             self.reset()
             time.sleep(0.5) 
-            print("eo")
 
         ## 6.2. when the robot is out of the pheromone grid
-        if abs(x) >= 5.6 or abs(y) >= 5.6:
+        if abs(x) >= 4.7 or abs(y) >= 4.7:
             self.reset()
             time.sleep(0.5)
-            print("wo?")
+
         end_time = time.time()
         step_time = end_time - start_time
 
@@ -373,7 +384,9 @@ class Env:
         self.ep_len_counter = self.ep_len_counter + 1
         print("-------------------")
         print("Ep: {}".format(self.ep_len_counter))
-        print("Step time: {}".format(step_time))
+        print("Const Phero Reward: {}".format(const_phero_rwd))
+        print("Stay Phero Reward: {}".format(stay_phero_rwd))
+        print("Total Reward: {}".format(reward))
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
         return range(0, self.num_robots), state, reward, done, info
 
