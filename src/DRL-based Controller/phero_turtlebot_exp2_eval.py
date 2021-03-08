@@ -23,10 +23,10 @@ from turtlebot3_pheromone.msg import fma
 import time
 import tensorflow
 import threading
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, merge
-from keras.layers.merge import Add, Concatenate
-from keras.optimizers import Adam
+# from keras.models import Sequential, Model
+# from keras.layers import Dense, Dropout, Input, merge
+# from keras.layers.merge import Add, Concatenate
+# from keras.optimizers import Adam
 import keras.backend as K
 import gym
 import numpy as np
@@ -38,6 +38,9 @@ import scipy.io as sio
 
 
 class InfoGetter(object):
+    '''
+    Get Information from rostopic. It reduces delay 
+    '''
     def __init__(self):
         #event that will block until the info is received
         self._event = threading.Event()
@@ -60,6 +63,17 @@ class InfoGetter(object):
 
 class Env:
 
+    # ========================================================================= #
+	#                                Env Class                                  #
+	# ========================================================================= #
+
+    '''
+    This class define Env (identical concept of OpenAI gym Env).
+    1. __init__() - define required variables
+    2. reset()
+    3. step()
+    '''
+
     def __init__(self):
 
         # Settings
@@ -78,13 +92,6 @@ class Env:
 
         self.pose_info = rospy.Subscriber("/gazebo/model_states", ModelStates, self.pose_ig)
         self.phero_info = rospy.Subscriber("/phero_value", fma, self.phero_ig)
-
-        
-
-        ## tf related lines. Needed for real turtlebot odometry reading.
-        #   Skip for now. 
-        #
-
         self.rate = rospy.Rate(100)
 
         # Default Twist message
@@ -130,7 +137,6 @@ class Env:
         self.time_str = time.strftime("%Y%m%d-%H%M%S")
         self.file_name = "rl_{}_{}".format(self.num_robots, self.time_str)
         self.traj_name = "{}_traj".format(self.file_name)
-        print(self.file_name)
 
         # Experiments
         self.isExpDone = False
@@ -155,19 +161,17 @@ class Env:
         #self.reset()
         self.reset_timer = time.time()
 
-    #To be done when real robots are used
-    
-    #def get_odom(self):
-
-    #def print_odom(self):
-
     def reset(self, model_state = None, id_bots = 3):
-        
-        #self.is_collided = False
+        '''
+        Resettng the Experiment
+        1. Update the counter based on the flag from step
+        2. Target Update
+        3. Reset robot and target
+        4. Logging
+        '''
         print("goal value: {}".format(self.is_goal))
         print("done?: {}".format(self.dones))
 
-        # ID assignment 
         tb3_0 = 3
         tb3_1 = 3
         if model_state is not None:
@@ -179,6 +183,10 @@ class Env:
         else:
             tb3_0 = -1
             tb3_1 = -2
+
+        # ========================================================================= #
+	    #                          1. COUNTER UPDATE                                #
+	    # ========================================================================= #
 
         # Increment Collision Counter
         if self.is_collided == True:
@@ -208,6 +216,10 @@ class Env:
         self.is_goal = 0
         self.is_timeout = False
 
+        # ========================================================================= #
+	    #                          2. TARGET UPDATE                                 #
+	    # ========================================================================= #
+
         # Reset position assignment
         if id_bots == 3: 
             if self.target_index < self.num_experiments-1:
@@ -233,10 +245,11 @@ class Env:
         
         
         print("target: {}".format(self.target))
-
-
-        #print("id_bots = {}, tb3_0 = {}, tb3_1 = {}".format(id_bots, tb3_0, tb3_1))
         
+        # ========================================================================= #
+	    #                                 3. RESET                                  #
+	    # ========================================================================= #
+
         # Reset Turtlebot 1 position
         state_msg = ModelState()
         state_msg.model_name = 'tb3_0'
@@ -296,7 +309,9 @@ class Env:
         
         self.dones = [False] * self.num_robots
 
-        ################################### Logging #########################################
+        # ========================================================================= #
+	    #                                 4. LOGGING                                #
+	    # ========================================================================= #
 
         if self.counter_step == 0:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
@@ -339,9 +354,6 @@ class Env:
         
         return range(0, self.num_robots), initial_state
 
-        # When turtlebot is collided with wall, obstacles etc - need to reset
-        # def turtlebot_collsion(self):
-
     def action_to_twist(self, action):
         t = Twist()
 
@@ -353,6 +365,10 @@ class Env:
         return t
     
     def posAngle(self, model_state):
+        '''
+        Get model_state from rostopic and
+        return (1) x position of robots (2) y position of robots (3) angle of the robots (4) id of the robots
+        '''
         pose = [None]*self.num_robots
         ori = [None]*self.num_robots
         x = [None]*self.num_robots
@@ -398,9 +414,17 @@ class Env:
         return tmp
 
     def step(self, actions, time_step=0.1):
-        # 20201010 How can I make the action input results in the change in state?
-        # I read tensorswarm, and it takes request and go one step.
-        # It waited until m_loop_done is True - at the end of the post step.
+        '''
+        Take a step with the given action from DRL in the Environment
+        0. Initialisation
+        1. Move Robot for given time step
+        2. Read robot pose
+        3. Calculation of distances
+        4. Read Pheromone
+        5. Reward Assignment
+        6. Reset
+        7. Other Debugging Related
+        '''
         
         # 0. Initiliasation
         start_time = time.time()

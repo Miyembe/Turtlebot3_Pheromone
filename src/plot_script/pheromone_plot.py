@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 pheromap_name = 'tcds_exp3'
-data = np.load('../tmp/{}.npy'.format(pheromap_name))
+data = np.load('../../tmp/{}.npy'.format(pheromap_name))
 
 #print("data: {}".format(data))
 
