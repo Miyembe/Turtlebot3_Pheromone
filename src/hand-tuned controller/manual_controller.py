@@ -44,8 +44,9 @@ class WaypointNavigation:
         self.move_cmd = Twist()
 
         # Initialise positions
-        self.goal = [4,0]
+        self.goal = [[3,0], [3,-3]]
         self.obstacle = [[2,0], [-2,0], [0,2], [0,-2]]
+        self.goal_index = 0
 
         # Initialise ros related topics
         self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size = 1)
@@ -71,8 +72,8 @@ class WaypointNavigation:
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
 
         self.BIAS = 0.25
-        self.V_COEF = 1.0#self.v_range[0]
-        self.W_COEF = 0.2#self.w_range[0]
+        self.V_COEF = 1.0 #self.v_range[0]
+        self.W_COEF = 0.2 #self.w_range[0]
 
         #self.b_size = self.b_range.size        
         self.v_size = self.v_range.size
@@ -195,6 +196,10 @@ class WaypointNavigation:
             msg.angular.z = w
             self.reset_flag = False
         elif (distance <= self.distThr and reset_time > 1):
+            # self.goal_index += 1
+            # self.target_x = self.goal[self.goal_index][0]
+            # self.target_y = self.goal[self.goal_index][1]
+            #if self.goal_index >= 2:
             msg = Twist()
             self.is_goal = True
             self.reset()
@@ -365,7 +370,7 @@ class WaypointNavigation:
         # Reset Target Position
         state_target_msg = ModelState()    
         state_target_msg.model_name = 'unit_sphere' #'unit_sphere_0_0' #'unit_box_1' #'cube_20k_0'
-        state_target_msg.pose.position.x = self.target_x
+        state_target_msg.pose.position.x = 5.0
         state_target_msg.pose.position.y = 0.0
         state_target_msg.pose.position.z = 0.0
         state_target_msg.pose.orientation.x = 0
