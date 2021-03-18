@@ -313,7 +313,7 @@ class Env:
         ## 5.2. Stay Pheromone reward (The higher pheromone, the lower reward)
         distance_to_centers = [sqrt((x-self.centers[i][0])**2+(y-self.centers[i][1])**2) for i in range(len(self.centers))]
         print("distance_to_centers: {}".format(distance_to_centers))
-        close_to_centers = [True if i <= 1.0 else False for i in distance_to_centers]
+        close_to_centers = [True if i <= 0.8 else False for i in distance_to_centers]
         if any(close_to_centers) and self.is_stay == False:
             self.start_time = time.time()
             self.is_stay = True
@@ -327,7 +327,7 @@ class Env:
         self.stay_duration = self.cur_time - self.start_time
 
 
-        if self.stay_duration >= 3:
+        if self.stay_duration >= 5:
             stay_phero_rwd = 10
             done = True
             self.reset()
