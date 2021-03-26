@@ -557,6 +557,9 @@ class PPO:
 
 def main():
     env = phero_turtlebot_exp1.Env()
+    print(sys.version)
+    print("Tensorflow Version: {}".format(tf.__version__))
+    print("GPU available: {}".format(tf.test.is_gpu_available()))
     PPO_a = PPO(policy=PheroTurtlebotPolicy, env=env, nsteps=128, nminibatches=1, lam=0.95, gamma=0.99,
                 noptepochs=10, log_interval=10, ent_coef=.01,
                 lr=lambda f: f* 5.5e-4,

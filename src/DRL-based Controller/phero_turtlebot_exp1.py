@@ -99,6 +99,7 @@ class Env:
         self.state_num = 8 # 9 for pheromone 1 for goal distance, 2 for linear & angular speed, 1 for angle diff
         self.action_num = 2 # linear_x and angular_z
         self.observation_space = np.empty(self.state_num)
+        print("Observation_space type: {}".format(type(self.observation_space)))
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))#np.empty(self.action_num)
 
         # Set target position
@@ -106,7 +107,7 @@ class Env:
         self.target_y = 0.0
         self.target_index = 0
         self.radius = 4
-        self.num_experiments = 4
+        self.num_experiments = 20
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
