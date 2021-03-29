@@ -39,36 +39,43 @@ import logger
 #from numba import jit
 
 def stack_samples(samples):
-	array = np.array(samples)
+	
+	current_states = np.asarray(samples[0])
+	actions = np.asarray(samples[1])
+	rewards = np.asarray(samples[2])
+	new_states = np.asarray(samples[3])
+	dones = np.asarray(samples[4])
+	weights = np.asarray(samples[5])
+	batch_idxes = np.asarray(samples[6])
 	#before_current_states = np.stack(array[:,0])
-	current_states = np.stack(array[:,0]).reshape((array.shape[0],-1))
-	actions = np.stack(array[:,1]).reshape((array.shape[0],-1))
-	rewards = np.stack(array[:,2]).reshape((array.shape[0],-1))
-	new_states = np.stack(array[:,3]).reshape((array.shape[0],-1))
-	dones = np.stack(array[:,4]).reshape((array.shape[0],-1))
+	# current_states = np.stack(array[:,0]).reshape((array.shape[0],-1))
+	# actions = np.stack(array[:,1]).reshape((array.shape[0],-1))
+	# rewards = np.stack(array[:,2]).reshape((array.shape[0],-1))
+	# new_states = np.stack(array[:,3]).reshape((array.shape[0],-1))
+	# dones = np.stack(array[:,4]).reshape((array.shape[0],-1))
 
-
-	return current_states, actions, rewards, new_states, dones #, weights, indices, eps_d
+	return current_states, actions, rewards, new_states, dones, weights, batch_idxes
 class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
-				  prioritized_replay=False,
+				  prioritized_replay=True,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
 				  prioritized_replay_beta_iters=None,
 				  prioritized_replay_eps=1e-6):
 		self.buffer_size = buffer_size
+		self.prioritized_replay_eps = prioritized_replay_eps
 		if prioritized_replay:
 			self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
 			if prioritized_replay_beta_iters is None:
 				prioritized_replay_beta_iters = total_timesteps
-			beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
+			self.beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
 											initial_p = prioritized_replay_beta0,
 											final_p = 1.0)
 		else: 
 			self.replay_buffer = ReplayBuffer(buffer_size)
-			beta_schedule = None
+			self.beta_schedule = None
 	def add(self, obs_t, action, reward, obs_tp1, done):
 		self.replay_buffer.add(obs_t, action, reward, obs_tp1, done)
 		
@@ -97,7 +104,7 @@ class ActorCritic:
 		self.hyper_parameters_eps_d = 0.4
 
 		self.demo_size = 1000
-		self.save_dir = "weights/"
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRL-based\ Controller/weights/"
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -194,15 +201,16 @@ class ActorCritic:
 
    		# 1, sample
 		# cur_states, actions, rewards, new_states, done = stack_samples(samples)
-		cur_states, actions, rewards, new_states, dones,  = stack_samples(samples) # PER version
+		cur_states, actions, rewards, new_states, dones, weights, batch_idxes = stack_samples(samples) # PER version also checks if I need to use stack_samples
 		target_actions = self.target_actor_model.predict(new_states)
 		future_rewards = self.target_critic_model.predict([new_states, target_actions])
-		rewards = rewards + self.gamma*future_rewards * (1 - dones)
-
-		# print("cur_states is %s", cur_states)
+		rewards = rewards + self.gamma*future_rewards.reshape(future_rewards.shape[0]) * (1 - dones)
+		Q_now = self.critic_model.predict([cur_states, actions])		
+		td_errors = rewards - Q_now.reshape(Q_now.shape[0])
 
 		# evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0, sample_weight=_sample_weight)
-		evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0)
+	
+		evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0, sample_weight= weights)
 		# print('\nhistory dict:', evaluation.history)
 
 
@@ -217,6 +225,7 @@ class ActorCritic:
 			self.actor_state_input: cur_states,
 			self.actor_critic_grad: grads
 		})
+		return td_errors
 		# print("grads*weights is %s", grads)
 		
 
@@ -226,22 +235,34 @@ class ActorCritic:
 		critic_values = self.critic_model.predict([cur_states, actions])
 		return critic_values
 
-	def train(self):
+	def train(self, t):
 		batch_size = self.batch_size
-		if len(self.memory) < batch_size: #batch_size:
-			return
-		
-		#if self.replay_buffer.__len__() < batch_size: #batch_size:
+		#if len(self.memory) < batch_size: #batch_size: # uniform buffer 
 		#	return
-		samples = random.sample(self.memory, batch_size)    # what is deque, what is random.sample? self.mempory begins with self.memory.append
-		#samples = self.replay_buffer.sample(batch_size, beta=beta_schedule.value(t))
+		
+		if self.replay_buffer.replay_buffer.__len__() < batch_size: #per
+			return
+		#samples = random.sample(self.memory, batch_size)    # what is deque, what is random.sample? self.mempory begins with self.memory.append
+		samples = self.replay_buffer.replay_buffer.sample(batch_size, beta=self.replay_buffer.beta_schedule.value(t))
+		(obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = samples
 		# samples = self.memory.sample(1, batch_size)
 		self.samples = samples
 		# print("samples is %s", samples)
 		# print("samples [1] is %s", samples[1])
-		print("length of memory is %s", len(self.memory))
+		#print("length of memory is %s", len(self.memory))
 		# print("samples shape is %s", samples.shape)
-		self._train_critic_actor(samples)
+		#print("1. obs: {}".format(np.shape(obses_t)))
+		#print("2. actions: {}".format(np.shape(actions)))
+		#print("3. rewards: {}".format(np.shape(rewards)))
+		#print("4. rewards: {}".format(np.shape(obses_tp1)))
+		#print("5. rewards: {}".format(np.shape(dones)))
+		#print("6. rewards: {}".format(np.shape(weights)))
+		#print("7. rewards: {}".format(np.shape(batch_idxes)))
+		td_errors = self._train_critic_actor(samples)
+
+		# priority updates
+		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 
@@ -297,8 +318,8 @@ class ActorCritic:
 	# ========================================================================= #
 
 	def save_weight(self, num_trials, trial_len):
-		self.actor_model.save_weights(self.save_dir + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
-		self.critic_model.save_weights(self.save_dir + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
+		self.actor_model.save_weights('actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
+		self.critic_model.save_weights('criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
 	def play(self, cur_state):
 		return self.actor_model.predict(cur_state)
@@ -422,7 +443,7 @@ def main():
 				start_time = time.time()
 
 				if (j % 5 == 0):
-					actor_critic.train()
+					actor_critic.train(j)
 					actor_critic.update_target()   
 
 				end_time = time.time()
@@ -434,7 +455,7 @@ def main():
 				#print("current_state is %s", current_state)
 				##########################################################################################
 				actor_critic.remember(current_states, actions, rewards, new_states, dones)
-				#actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
+				actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
 				current_states = new_states
 
 

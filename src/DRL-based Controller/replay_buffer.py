@@ -23,7 +23,7 @@ class ReplayBuffer(object):
     def add(self, obs_t, action, reward, obs_tp1, done):
         # 20210325 np array case added
         if obs_t.shape[0] > 1:
-            for i in obs_t.shape[0]:
+            for i in range(obs_t.shape[0]):
                 data = (obs_t[i], action[i], reward[i], obs_tp1[i], done[i])
                 if self._next_idx >= len(self._storage):
                     self._storage.append(data)
@@ -104,7 +104,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     def add(self, *args, **kwargs):
         """See ReplayBuffer.store_effect"""
         idx = self._next_idx
-        super().add(*args, **kwargs)
+        super(PrioritizedReplayBuffer, self).add(*args, **kwargs)
         self._it_sum[idx] = self._max_priority ** self._alpha
         self._it_min[idx] = self._max_priority ** self._alpha
 
