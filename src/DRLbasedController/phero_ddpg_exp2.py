@@ -22,7 +22,7 @@ import random
 from collections import deque
 from utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 from distributions import make_pdtype
-from replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
+from replay_buffer import ReplayBuffer, PrioritizedReplayBuffer, HighlightReplayBuffer
 from schedule import LinearSchedule
 import os.path as osp
 import joblib
@@ -59,6 +59,7 @@ class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
+				  type_buffer="HER",
 				  prioritized_replay=True,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
@@ -67,7 +68,10 @@ class ExperienceReplayBuffer:
 		self.buffer_size = buffer_size
 		self.prioritized_replay_eps = prioritized_replay_eps
 		if prioritized_replay:
-			self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
+			if type_buffer == "PER":
+				self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
+			if type_buffer == "HER":
+				self.replay_buffer = HighlightReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
 			if prioritized_replay_beta_iters is None:
 				prioritized_replay_beta_iters = total_timesteps
 			self.beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
@@ -104,7 +108,8 @@ class ActorCritic:
 		self.hyper_parameters_eps_d = 0.4
 
 		self.demo_size = 1000
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRL-based\ Controller/weights/"
+		time_str = time.strftime("%Y%m%d-%H%M%S")
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" +time_str
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -261,8 +266,8 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 
@@ -318,8 +323,8 @@ class ActorCritic:
 	# ========================================================================= #
 
 	def save_weight(self, num_trials, trial_len):
-		self.actor_model.save_weights('actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
-		self.critic_model.save_weights('criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
+		self.actor_model.save_weights(self.save_dir + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
+		self.critic_model.save_weights(self.save_dir + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
 	def play(self, cur_state):
 		return self.actor_model.predict(cur_state)
@@ -339,7 +344,7 @@ def main():
 	########################################################
 	num_trials = 5000
 	trial_len  = 256
-	log_interval = 10
+	log_interval = 5
 	train_indicator = 1
 	tfirststart = time.time()
 	# Double ended queue with max size 100 to store episode info
@@ -354,7 +359,7 @@ def main():
 
 	# actor_critic.read_human_data()
 	
-	#step_reward = [0,0]
+	step_reward = np.array([0, 0]).reshape(1,2)
 	#step_Q = [0,0]
 	step = 0
 
@@ -389,6 +394,7 @@ def main():
 
 		# actor_critic.actor_model.load_weights("actormodel-90-1000.h5")
 		# actor_critic.critic_model.load_weights("criticmodel-90-1000.h5")
+		step_reward = np.array([0, 0]).reshape(1,2)
 		for i in range(num_trials):
 			print("trial:" + str(i))
 			
@@ -439,6 +445,7 @@ def main():
 				#print("Train_step time: {}".format(time.time() - step_start))
 
 				epinfos.append(infos[0]['episode'])
+				print
 				
 				start_time = time.time()
 
@@ -473,10 +480,11 @@ def main():
 
 			if i % log_interval == 0 or i == 0:
 				#ev = explained_variance(values, returns)
+				reward_mean = safemean([epinfo['r'] for epinfo in epinfobuf])
 				logger_ins.logkv("serial_timesteps", i*trial_len)
 				logger_ins.logkv("nupdates", i)
 				logger_ins.logkv("total_timesteps", i*trial_len)
-				logger_ins.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
+				logger_ins.logkv('eprewmean', reward_mean)
 				logger_ins.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
 				logger_ins.logkv('time_elapsed', tnow - tfirststart)
 				# for (lossval, lossname) in zip(lossvals, model.loss_names):
@@ -484,8 +492,12 @@ def main():
 				# logger_ins.dumpkvs()
 				# for (lossval, lossname) in zip(lossvals, model.loss_names):
 				#     board_logger.log_scalar(lossname, lossval, update)
-				board_logger.log_scalar("eprewmean", safemean([epinfo['r'] for epinfo in epinfobuf]), i)
+				board_logger.log_scalar("eprewmean", reward_mean, i)
+				
 				board_logger.flush()
+		
+				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
+                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
 		
 
