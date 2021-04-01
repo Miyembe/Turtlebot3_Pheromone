@@ -4,3 +4,5 @@ src/pheromone_plot_generation.ipynb
 src/*.pyc
 src/log/checkpoints/*
 src/DRLbasedController/weights/*
+critic*
+actor*
