@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp2
+import phero_turtlebot_exp2_eval
 import numpy as np
 import os
 import sys
@@ -109,7 +109,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" +time_str
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" 
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -339,13 +339,13 @@ def main():
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp2.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp2_eval.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	########################################################
 	num_trials = 5000
 	trial_len  = 256
 	log_interval = 5
-	train_indicator = 1
+	train_indicator = 0
 	tfirststart = time.time()
 	# Double ended queue with max size 100 to store episode info
 	epinfobuf = deque(maxlen=100)
@@ -504,44 +504,51 @@ def main():
 	if train_indicator==0:
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			current_state = game_state.reset()
+			_, current_states = game_state.reset() 
 			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + time_str + "actormodel-2950-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + time_str + "criticrmodel-2950-256.h5")
+			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210331-103450actormodel-1370-256.h5")
+			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210331-103450criticmodel-1370-256.h5")
 			##############################################################################################
 			total_reward = 0
 			
 			for j in range(trial_len):
 
 				###########################################################################################
-				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
+				current_states = current_states.reshape((num_robots, game_state.observation_space.shape[0]))
 
 				start_time = time.time()
-				action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
-				action = action.reshape((1, game_state.action_space.shape[0]))
+				#action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
+				actions = []
+				for k in range(num_robots):
+					action, eps = actor_critic.act(current_states[k])
+					action = action.reshape((1, game_state.action_space.shape[0]))
+					actions.append(action)
+				actions = np.squeeze(np.asarray(actions))
+                #action = action.reshape((1, game_state.action_space.shape[0]))
 				end_time = time.time()
-				print(1/(end_time - start_time), "fps for calculating next step")
+				#print(1/(end_time - start_time), "fps for calculating next step")
 
-				_, new_state, reward, done = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
-				total_reward = total_reward + reward
+				_, new_states, rewards, dones, infos, _ = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				#total_reward = total_reward + reward
 				###########################################################################################
 
-				if j == (trial_len - 1):
-					done = 1
-					print("this is reward:", total_reward)
+				# if j == (trial_len - 1):
+					
+                #     done = 1
+				# 	print("this is reward:", total_reward)
 					
 
 				# if (j % 5 == 0):
 				# 	actor_critic.train()
 				# 	actor_critic.update_target()   
 				
-				new_state = new_state.reshape((1, game_state.observation_space.shape[0]))
+				new_states = new_states.reshape((num_robots, game_state.observation_space.shape[0]))
 				# actor_critic.remember(cur_state, action, reward, new_state, done)   # remember all the data using memory, memory data will be samples to samples automatically.
 				# cur_state = new_state
 
 				##########################################################################################
 				#actor_critic.remember(current_state, action, reward, new_state, done)
-				current_state = new_state
+				current_states = new_states
 
 				##########################################################################################
 
