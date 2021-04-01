@@ -158,7 +158,7 @@ class Env:
 
         self.log_timer = time.time()
 
-
+        #self.reset()
         self.reset_timer = time.time()
 
     def reset(self, model_state = None, id_bots = 3):
@@ -227,7 +227,7 @@ class Env:
             else:
                 self.target_index = 0
                 
-        angle_target = self.target_index*2*pi/self.num_experiments        
+        angle_target = (self.target_index-1)*2*pi/self.num_experiments        
 
         self.x[0] = (self.d_robots/2)*cos(angle_target)
         self.y[0] = (self.d_robots/2)*sin(angle_target)
