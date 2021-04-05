@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp2
+import phero_turtlebot_exp2_eval
 import numpy as np
 import os
 import sys
@@ -59,7 +59,7 @@ class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
-				  type_buffer="PER",
+				  type_buffer="HER",
 				  prioritized_replay=True,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
@@ -67,7 +67,6 @@ class ExperienceReplayBuffer:
 				  prioritized_replay_eps=1e-6):
 		self.buffer_size = buffer_size
 		self.prioritized_replay_eps = prioritized_replay_eps
-		self.type_buffer = type_buffer
 		if prioritized_replay:
 			if type_buffer == "PER":
 				self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
@@ -109,9 +108,9 @@ class ActorCritic:
 		self.hyper_parameters_eps_d = 0.4
 
 		self.demo_size = 1000
-		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" + self.time_str
-		
+		time_str = time.strftime("%Y%m%d-%H%M%S")
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" 
+
 		# ===================================================================== #
 		#                               Actor Model                             #
 		# Chain rule: find the gradient of chaging the actor network params in  #
@@ -123,8 +122,7 @@ class ActorCritic:
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256)
-		# File name
-		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
+
 		
 
 		self.actor_state_input, self.actor_model = self.create_actor_model()
@@ -268,8 +266,8 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 
@@ -325,8 +323,8 @@ class ActorCritic:
 	# ========================================================================= #
 
 	def save_weight(self, num_trials, trial_len):
-		self.actor_model.save_weights('actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
-		self.critic_model.save_weights('criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
+		self.actor_model.save_weights(self.save_dir + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
+		self.critic_model.save_weights(self.save_dir + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
 	def play(self, cur_state):
 		return self.actor_model.predict(cur_state)
@@ -341,20 +339,14 @@ def main():
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp2.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp2_eval.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	########################################################
 	num_trials = 5000
 	trial_len  = 256
 	log_interval = 5
-	train_indicator = 1
+	train_indicator = 0
 	tfirststart = time.time()
-
-	# Reward Logging
-	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
-		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-		csv_writer.writerow(['Episode', 'Average Reward'])
-
 	# Double ended queue with max size 100 to store episode info
 	epinfobuf = deque(maxlen=100)
 
@@ -453,7 +445,7 @@ def main():
 				#print("Train_step time: {}".format(time.time() - step_start))
 
 				epinfos.append(infos[0]['episode'])
-				
+				print
 				
 				start_time = time.time()
 
@@ -503,55 +495,60 @@ def main():
 				board_logger.log_scalar("eprewmean", reward_mean, i)
 				
 				board_logger.flush()
-				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
-					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
+		
 				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
-				sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
+				sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
 		
 
 	if train_indicator==0:
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			current_state = game_state.reset()
+			_, current_states = game_state.reset() 
 			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + time_str + "actormodel-2950-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + time_str + "criticrmodel-2950-256.h5")
+			actor_critic.actor_model.load_weights(actor_critic.save_dir + "actormodel-3100-256.h5")
+			actor_critic.critic_model.load_weights(actor_critic.save_dir + "criticmodel-3100-256.h5")
 			##############################################################################################
 			total_reward = 0
 			
 			for j in range(trial_len):
 
 				###########################################################################################
-				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
+				current_states = current_states.reshape((num_robots, game_state.observation_space.shape[0]))
 
 				start_time = time.time()
-				action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
-				action = action.reshape((1, game_state.action_space.shape[0]))
+				#action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
+				actions = []
+				for k in range(num_robots):
+					action, eps = actor_critic.act(current_states[k])
+					action = action.reshape((1, game_state.action_space.shape[0]))
+					actions.append(action)
+				actions = np.squeeze(np.asarray(actions))
+                #action = action.reshape((1, game_state.action_space.shape[0]))
 				end_time = time.time()
-				print(1/(end_time - start_time), "fps for calculating next step")
+				#print(1/(end_time - start_time), "fps for calculating next step")
 
-				_, new_state, reward, done = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
-				total_reward = total_reward + reward
+				_, new_states, rewards, dones, infos, _ = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				#total_reward = total_reward + reward
 				###########################################################################################
 
-				if j == (trial_len - 1):
-					done = 1
-					print("this is reward:", total_reward)
+				# if j == (trial_len - 1):
+					
+                #     done = 1
+				# 	print("this is reward:", total_reward)
 					
 
 				# if (j % 5 == 0):
 				# 	actor_critic.train()
 				# 	actor_critic.update_target()   
 				
-				new_state = new_state.reshape((1, game_state.observation_space.shape[0]))
+				new_states = new_states.reshape((num_robots, game_state.observation_space.shape[0]))
 				# actor_critic.remember(cur_state, action, reward, new_state, done)   # remember all the data using memory, memory data will be samples to samples automatically.
 				# cur_state = new_state
 
 				##########################################################################################
 				#actor_critic.remember(current_state, action, reward, new_state, done)
-				current_state = new_state
+				current_states = new_states
 
 				##########################################################################################
 

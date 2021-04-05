@@ -449,7 +449,8 @@ class Env:
         distance_to_goals_prv = [None]*self.num_robots
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
-
+           
+        
         # Collect previous pheromone data
         state = self.phero_ig.get_msg()
         phero_prev = [phero.data for phero in state.values]
@@ -495,6 +496,7 @@ class Env:
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
+            print("Robot {}: {}".format(i, distance_to_goals[i]))
 
         theta = self.angle0To360(theta)
         global_angle = self.angle0To360(global_angle)
