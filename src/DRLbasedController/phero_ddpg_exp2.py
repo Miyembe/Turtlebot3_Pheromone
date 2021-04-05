@@ -59,7 +59,7 @@ class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
-				  type_buffer="HER",
+				  type_buffer="PER",
 				  prioritized_replay=True,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
@@ -67,6 +67,7 @@ class ExperienceReplayBuffer:
 				  prioritized_replay_eps=1e-6):
 		self.buffer_size = buffer_size
 		self.prioritized_replay_eps = prioritized_replay_eps
+		self.type_buffer = type_buffer
 		if prioritized_replay:
 			if type_buffer == "PER":
 				self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
@@ -108,9 +109,9 @@ class ActorCritic:
 		self.hyper_parameters_eps_d = 0.4
 
 		self.demo_size = 1000
-		time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" +time_str
-
+		self.time_str = time.strftime("%Y%m%d-%H%M%S")
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" + self.time_str
+		
 		# ===================================================================== #
 		#                               Actor Model                             #
 		# Chain rule: find the gradient of chaging the actor network params in  #
@@ -122,7 +123,8 @@ class ActorCritic:
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256)
-
+		# File name
+		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		
 
 		self.actor_state_input, self.actor_model = self.create_actor_model()
@@ -266,8 +268,8 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 
@@ -323,8 +325,8 @@ class ActorCritic:
 	# ========================================================================= #
 
 	def save_weight(self, num_trials, trial_len):
-		self.actor_model.save_weights(self.save_dir + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
-		self.critic_model.save_weights(self.save_dir + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
+		self.actor_model.save_weights('actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
+		self.critic_model.save_weights('criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
 	def play(self, cur_state):
 		return self.actor_model.predict(cur_state)
@@ -347,6 +349,12 @@ def main():
 	log_interval = 5
 	train_indicator = 1
 	tfirststart = time.time()
+
+	# Reward Logging
+	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
+		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+		csv_writer.writerow(['Episode', 'Average Reward'])
+
 	# Double ended queue with max size 100 to store episode info
 	epinfobuf = deque(maxlen=100)
 
@@ -445,7 +453,7 @@ def main():
 				#print("Train_step time: {}".format(time.time() - step_start))
 
 				epinfos.append(infos[0]['episode'])
-				print
+				
 				
 				start_time = time.time()
 
@@ -495,9 +503,11 @@ def main():
 				board_logger.log_scalar("eprewmean", reward_mean, i)
 				
 				board_logger.flush()
-		
+				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
+					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
 				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
-                sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
+				sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
 
 		
 
