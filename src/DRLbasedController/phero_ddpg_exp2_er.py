@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp2_eval2
+import phero_turtlebot_exp2
 import numpy as np
 import os
 import sys
@@ -22,7 +22,7 @@ import random
 from collections import deque
 from utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 from distributions import make_pdtype
-from replay_buffer import ReplayBuffer, PrioritizedReplayBuffer, HighlightReplayBuffer
+from replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from schedule import LinearSchedule
 import os.path as osp
 import joblib
@@ -39,51 +39,40 @@ import logger
 #from numba import jit
 
 def stack_samples(samples):
-	
-	current_states = np.asarray(samples[0])
-	actions = np.asarray(samples[1])
-	rewards = np.asarray(samples[2])
-	new_states = np.asarray(samples[3])
-	dones = np.asarray(samples[4])
-	weights = np.asarray(samples[5])
-	batch_idxes = np.asarray(samples[6])
+	array = np.array(samples)
 	#before_current_states = np.stack(array[:,0])
-	# current_states = np.stack(array[:,0]).reshape((array.shape[0],-1))
-	# actions = np.stack(array[:,1]).reshape((array.shape[0],-1))
-	# rewards = np.stack(array[:,2]).reshape((array.shape[0],-1))
-	# new_states = np.stack(array[:,3]).reshape((array.shape[0],-1))
-	# dones = np.stack(array[:,4]).reshape((array.shape[0],-1))
+	current_states = np.stack(array[:,0]).reshape((array.shape[0],-1))
+	actions = np.stack(array[:,1]).reshape((array.shape[0],-1))
+	rewards = np.stack(array[:,2]).reshape((array.shape[0],-1))
+	new_states = np.stack(array[:,3]).reshape((array.shape[0],-1))
+	dones = np.stack(array[:,4]).reshape((array.shape[0],-1))
 
-	return current_states, actions, rewards, new_states, dones, weights, batch_idxes
+
+	return current_states, actions, rewards, new_states, dones #, weights, indices, eps_d
 class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
-				  type_buffer="HER",
-				  prioritized_replay=True,
+				  prioritized_replay=False,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
 				  prioritized_replay_beta_iters=None,
 				  prioritized_replay_eps=1e-6):
 		self.buffer_size = buffer_size
-		self.prioritized_replay_eps = prioritized_replay_eps
 		if prioritized_replay:
-			if type_buffer == "PER":
-				self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
-			if type_buffer == "HER":
-				self.replay_buffer = HighlightReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
+			self.replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
 			if prioritized_replay_beta_iters is None:
 				prioritized_replay_beta_iters = total_timesteps
-			self.beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
+			beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
 											initial_p = prioritized_replay_beta0,
 											final_p = 1.0)
 		else: 
 			self.replay_buffer = ReplayBuffer(buffer_size)
-			self.beta_schedule = None
+			beta_schedule = None
 	def add(self, obs_t, action, reward, obs_tp1, done):
 		self.replay_buffer.add(obs_t, action, reward, obs_tp1, done)
-		
-		
+
+
 # determines how to assign values to each state, i.e. takes the state
 # and action (two-input model) and determines the corresponding value
 class ActorCritic:
@@ -108,8 +97,7 @@ class ActorCritic:
 		self.hyper_parameters_eps_d = 0.4
 
 		self.demo_size = 1000
-		time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" 
+		self.save_dir = "weights/"
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -123,7 +111,7 @@ class ActorCritic:
 		# Replay Buffer
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256)
 
-		
+
 
 		self.actor_state_input, self.actor_model = self.create_actor_model()
 		_, self.target_actor_model = self.create_actor_model()
@@ -202,20 +190,19 @@ class ActorCritic:
 
 
 	def _train_critic_actor(self, samples):
- 
+
 
    		# 1, sample
 		# cur_states, actions, rewards, new_states, done = stack_samples(samples)
-		cur_states, actions, rewards, new_states, dones, weights, batch_idxes = stack_samples(samples) # PER version also checks if I need to use stack_samples
+		cur_states, actions, rewards, new_states, dones,  = stack_samples(samples) # PER version
 		target_actions = self.target_actor_model.predict(new_states)
 		future_rewards = self.target_critic_model.predict([new_states, target_actions])
-		rewards = rewards + self.gamma*future_rewards.reshape(future_rewards.shape[0]) * (1 - dones)
-		Q_now = self.critic_model.predict([cur_states, actions])		
-		td_errors = rewards - Q_now.reshape(Q_now.shape[0])
+		rewards = rewards + self.gamma*future_rewards * (1 - dones)
+
+		# print("cur_states is %s", cur_states)
 
 		# evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0, sample_weight=_sample_weight)
-	
-		evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0, sample_weight= weights)
+		evaluation = self.critic_model.fit([cur_states, actions], rewards, verbose=0)
 		# print('\nhistory dict:', evaluation.history)
 
 
@@ -230,9 +217,8 @@ class ActorCritic:
 			self.actor_state_input: cur_states,
 			self.actor_critic_grad: grads
 		})
-		return td_errors
 		# print("grads*weights is %s", grads)
-		
+
 
 
 
@@ -240,34 +226,22 @@ class ActorCritic:
 		critic_values = self.critic_model.predict([cur_states, actions])
 		return critic_values
 
-	def train(self, t):
+	def train(self):
 		batch_size = self.batch_size
-		#if len(self.memory) < batch_size: #batch_size: # uniform buffer 
-		#	return
-		
-		if self.replay_buffer.replay_buffer.__len__() < batch_size: #per
+		if len(self.memory) < batch_size: #batch_size:
 			return
-		#samples = random.sample(self.memory, batch_size)    # what is deque, what is random.sample? self.mempory begins with self.memory.append
-		samples = self.replay_buffer.replay_buffer.sample(batch_size, beta=self.replay_buffer.beta_schedule.value(t))
-		(obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = samples
+
+		#if self.replay_buffer.__len__() < batch_size: #batch_size:
+		#	return
+		samples = random.sample(self.memory, batch_size)    # what is deque, what is random.sample? self.mempory begins with self.memory.append
+		#samples = self.replay_buffer.sample(batch_size, beta=beta_schedule.value(t))
 		# samples = self.memory.sample(1, batch_size)
 		self.samples = samples
 		# print("samples is %s", samples)
 		# print("samples [1] is %s", samples[1])
-		#print("length of memory is %s", len(self.memory))
+		print("length of memory is %s", len(self.memory))
 		# print("samples shape is %s", samples.shape)
-		#print("1. obs: {}".format(np.shape(obses_t)))
-		#print("2. actions: {}".format(np.shape(actions)))
-		#print("3. rewards: {}".format(np.shape(rewards)))
-		#print("4. rewards: {}".format(np.shape(obses_tp1)))
-		#print("5. rewards: {}".format(np.shape(dones)))
-		#print("6. rewards: {}".format(np.shape(weights)))
-		#print("7. rewards: {}".format(np.shape(batch_idxes)))
-		td_errors = self._train_critic_actor(samples)
-
-		# priority updates
-		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		self._train_critic_actor(samples)
 
 
 
@@ -278,7 +252,7 @@ class ActorCritic:
 	def _update_actor_target(self):
 		actor_model_weights  = self.actor_model.get_weights()
 		actor_target_weights = self.target_actor_model.get_weights()
-		
+
 		for i in range(len(actor_target_weights)):
 			actor_target_weights[i] = actor_model_weights[i]*self.tau + actor_target_weights[i]*(1-self.tau)
 		self.target_actor_model.set_weights(actor_target_weights)
@@ -286,7 +260,7 @@ class ActorCritic:
 	def _update_critic_target(self):
 		critic_model_weights  = self.critic_model.get_weights()
 		critic_target_weights = self.target_critic_model.get_weights()
-		
+
 		for i in range(len(critic_target_weights)):
 			critic_target_weights[i] = critic_model_weights[i]*self.tau + critic_target_weights[i]*(1-self.tau)
 		self.target_critic_model.set_weights(critic_target_weights)
@@ -316,7 +290,7 @@ class ActorCritic:
 			action[0][0] = action[0][0] 
 			action[0][1] = action[0][1]
 			return action, eps
-		
+
 
 	# ========================================================================= #
 	#                              save weights                                 #
@@ -339,18 +313,18 @@ def main():
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp2_eval2.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp2.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	########################################################
 	num_trials = 5000
 	trial_len  = 256
 	log_interval = 5
-	train_indicator = 0
+	train_indicator = 1
 	tfirststart = time.time()
 	# Double ended queue with max size 100 to store episode info
 	epinfobuf = deque(maxlen=100)
 
-	
+
 
     # Experiment related
 	num_robots = game_state.num_robots
@@ -358,7 +332,7 @@ def main():
 	current_state = game_state.reset()
 
 	# actor_critic.read_human_data()
-	
+
 	step_reward = np.array([0, 0]).reshape(1,2)
 	#step_Q = [0,0]
 	step = 0
@@ -372,7 +346,7 @@ def main():
 			current_state = game_state.reset()
 			##############################################################################################
 			total_reward = 0
-			
+
 			for j in range(100):
 				step = step +1
 				#print("step is %s", step)
@@ -386,28 +360,27 @@ def main():
 				print("action is speed: %s, angular: %s", action[0][1], action[0][0])
 				_, new_state, reward, done, _ = game_state.step(0.1, action[0][1]*5, action[0][0]*5) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				total_reward = total_reward + reward
-				
 
-	
+
+
 
 	if (train_indicator==1):
 
 		# actor_critic.actor_model.load_weights("actormodel-90-1000.h5")
 		# actor_critic.critic_model.load_weights("criticmodel-90-1000.h5")
-		step_reward = np.array([0, 0]).reshape(1,2)
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			
+
 			#game_state.step(0.3, 0.2, 0.0)
 			#game_state.reset()
-			
+
 			''' Get states of multiple robots (num_robots x num_states) '''
 			_, current_states = game_state.reset() 
 			##############################################################################################
 			#total_reward = 0
 			epinfos = []
 			for j in range(trial_len):
-				
+
 				###########################################################################################
 				#print('wanted value is %s:', game_state.observation_space.shape[0])
 				current_states = current_states.reshape((num_robots, game_state.observation_space.shape[0]))
@@ -421,7 +394,7 @@ def main():
 				actions = np.squeeze(np.asarray(actions))
 				#print("Actions: {}".format(actions))    
 				#print("action is speed: %s, angular: %s", action[0][1], action[0][0])
-				_, new_states, rewards, dones, infos, _ = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				_, new_states, rewards, dones, infos = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				#print("Rewards: {}".format(rewards))
 				#total_reward = total_reward + reward
 				###########################################################################################
@@ -430,7 +403,7 @@ def main():
 					done = 1
 					#print("this is reward:", total_reward)
 					#print('eps is', eps)
-				
+
 				step = step + 1
 				#plot_reward(step,reward,ax,fig)
 				#step_reward = np.append(step_reward,[step,reward])
@@ -445,12 +418,11 @@ def main():
 				#print("Train_step time: {}".format(time.time() - step_start))
 
 				epinfos.append(infos[0]['episode'])
-				print
-				
+
 				start_time = time.time()
 
 				if (j % 5 == 0):
-					actor_critic.train(j)
+					actor_critic.train()
 					actor_critic.update_target()   
 
 				end_time = time.time()
@@ -462,18 +434,18 @@ def main():
 				#print("current_state is %s", current_state)
 				##########################################################################################
 				actor_critic.remember(current_states, actions, rewards, new_states, dones)
-				actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
+				#actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
 				current_states = new_states
 
 
-				
+
 				##########################################################################################
 			if (i % 10==0):
 				actor_critic.save_weight(i, trial_len)
 			epinfobuf.extend(epinfos)
 			tnow = time.time()
 			#fps = int(nbatch / (tnow - tstart))
-			
+
 			##################################################
             ##      Logging and saving model & weights      ##
             ##################################################
@@ -484,7 +456,7 @@ def main():
 				logger_ins.logkv("serial_timesteps", i*trial_len)
 				logger_ins.logkv("nupdates", i)
 				logger_ins.logkv("total_timesteps", i*trial_len)
-				logger_ins.logkv('eprewmean', reward_mean)
+				logger_ins.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
 				logger_ins.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
 				logger_ins.logkv('time_elapsed', tnow - tfirststart)
 				# for (lossval, lossname) in zip(lossvals, model.loss_names):
@@ -492,66 +464,55 @@ def main():
 				# logger_ins.dumpkvs()
 				# for (lossval, lossname) in zip(lossvals, model.loss_names):
 				#     board_logger.log_scalar(lossname, lossval, update)
-				board_logger.log_scalar("eprewmean", reward_mean, i)
-				
+				board_logger.log_scalar("eprewmean", safemean([epinfo['r'] for epinfo in epinfobuf]), i)
 				board_logger.flush()
-		
+				print("num_trial")
 				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
                 sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(self.time_str), {'data':step_reward},True,'5',False,False,'row')
 
-		
+
 
 	if train_indicator==0:
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			_, current_states = game_state.reset() 
-			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210331-103450actormodel-810-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210331-103450criticmodel-810-256.h5")
+			current_state = game_state.reset()
+
+			actor_critic.actor_model.load_weights("actormodel-160-500.h5")
+			actor_critic.critic_model.load_weights("criticmodel-160-500.h5")
 			##############################################################################################
 			total_reward = 0
-			
+
 			for j in range(trial_len):
 
 				###########################################################################################
-				current_states = current_states.reshape((num_robots, game_state.observation_space.shape[0]))
+				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
 
 				start_time = time.time()
-				#action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
-				actions = []
-				for k in range(num_robots):
-					action, eps = actor_critic.act(current_states[k])
-					action = action.reshape((1, game_state.action_space.shape[0]))
-					actions.append(action)
-				actions = np.squeeze(np.asarray(actions))
-                #action = action.reshape((1, game_state.action_space.shape[0]))
+				action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
+				action = action.reshape((1, game_state.action_space.shape[0]))
 				end_time = time.time()
-				#print(1/(end_time - start_time), "fps for calculating next step")
+				print(1/(end_time - start_time), "fps for calculating next step")
 
-				_, new_states, rewards, dones, infos, _= game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
-				print("states: {}".format(current_states[0]))
-				print("actions: {}".format(actions[0]))
-
-                #total_reward = total_reward + reward
+				_, new_state, reward, done = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				total_reward = total_reward + reward
 				###########################################################################################
 
-				# if j == (trial_len - 1):
-					
-                #     done = 1
-				# 	print("this is reward:", total_reward)
-					
+				if j == (trial_len - 1):
+					done = 1
+					print("this is reward:", total_reward)
+
 
 				# if (j % 5 == 0):
 				# 	actor_critic.train()
 				# 	actor_critic.update_target()   
-				
-				new_states = new_states.reshape((num_robots, game_state.observation_space.shape[0]))
+
+				new_state = new_state.reshape((1, game_state.observation_space.shape[0]))
 				# actor_critic.remember(cur_state, action, reward, new_state, done)   # remember all the data using memory, memory data will be samples to samples automatically.
 				# cur_state = new_state
 
 				##########################################################################################
 				#actor_critic.remember(current_state, action, reward, new_state, done)
-				current_states = new_states
+				current_state = new_state
 
 				##########################################################################################
 
@@ -559,4 +520,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-

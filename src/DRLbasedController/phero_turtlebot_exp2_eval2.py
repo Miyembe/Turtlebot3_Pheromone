@@ -23,10 +23,10 @@ from turtlebot3_pheromone.msg import fma
 import time
 import tensorflow
 import threading
-# from keras.models import Sequential, Model
-# from keras.layers import Dense, Dropout, Input, merge
-# from keras.layers.merge import Add, Concatenate
-# from keras.optimizers import Adam
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Input, merge
+from keras.layers.merge import Add, Concatenate
+from keras.optimizers import Adam
 import keras.backend as K
 import gym
 import numpy as np
@@ -92,6 +92,14 @@ class Env:
 
         self.pose_info = rospy.Subscriber("/gazebo/model_states", ModelStates, self.pose_ig)
         self.phero_info = rospy.Subscriber("/phero_value", fma, self.phero_ig)
+
+
+        
+
+        ## tf related lines. Needed for real turtlebot odometry reading.
+        #   Skip for now. 
+        #
+
         self.rate = rospy.Rate(100)
 
         # Default Twist message
@@ -126,6 +134,9 @@ class Env:
         self.model_state = ModelStates()
         self.reset_proxy = rospy.ServiceProxy('gazebo/reset_simulation', Empty)
 
+        # Previous pheromone data
+        self.prev_phero = [None] *9
+        self.prev_prev_phero = [None]*9
         # Miscellanous
         self.ep_len_counter = 0
         self.dis_rwd_norm = 7
@@ -169,9 +180,12 @@ class Env:
         3. Reset robot and target
         4. Logging
         '''
-        print("goal value: {}".format(self.is_goal))
-        print("done?: {}".format(self.dones))
 
+        # ========================================================================= #
+	    #                           0. ID ASSIGNMENT                               #
+	    # ========================================================================= #
+
+        # ID assignment 
         tb3_0 = 3
         tb3_1 = 3
         if model_state is not None:
@@ -183,7 +197,7 @@ class Env:
         else:
             tb3_0 = -1
             tb3_1 = -2
-
+        
         # ========================================================================= #
 	    #                          1. COUNTER UPDATE                                #
 	    # ========================================================================= #
@@ -227,7 +241,7 @@ class Env:
             else:
                 self.target_index = 0
                 
-        angle_target = (self.target_index-1)*2*pi/self.num_experiments        
+        angle_target = self.target_index*2*pi/self.num_experiments        
 
         self.x[0] = (self.d_robots/2)*cos(angle_target)
         self.y[0] = (self.d_robots/2)*sin(angle_target)
@@ -243,11 +257,8 @@ class Env:
         
         self.target = [[self.x[1], self.y[1]], [self.x[0], self.y[0]]]
         
-        
-        print("target: {}".format(self.target))
-        
         # ========================================================================= #
-	    #                                 3. RESET                                  #
+	    #                                2. RESET                                   #
 	    # ========================================================================= #
 
         # Reset Turtlebot 1 position
@@ -277,8 +288,9 @@ class Env:
         rospy.wait_for_service('/gazebo/set_model_state')
         try: 
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
-            if id_bots == 3:
+            if id_bots == 3 or id_bots == tb3_0:
                 resp = set_state(state_msg)
+            if id_bots == 3 or id_bots == tb3_1:
                 resp_targ = set_state(state_target_msg)
         except rospy.ServiceException as e:
             print("Service Call Failed: %s"%e)
@@ -302,10 +314,10 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
-        
+
         self.dones = [False] * self.num_robots
 
-        # ========================================================================= #
+         # ========================================================================= #
 	    #                                 4. LOGGING                                #
 	    # ========================================================================= #
 
@@ -347,17 +359,24 @@ class Env:
             self.counter_timeout = 0
             self.target_index = 0
         self.reset_timer = time.time()
-        
+
         return range(0, self.num_robots), initial_state
 
+
     def action_to_twist(self, action):
+        '''
+        Convert Actions (2D array) to Twist (geometry.msgs)
+        '''
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.3
+        
+        t.linear.x = action[1]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(1, max( -1, action[1]*0.6))
+        #print("t.angular.z before conversion: {}".format(action[0]))
+        t.angular.z = min(1, max( -1, action[0]))
+        #print("t.angular.z after conversion: {}".format(t.angular.z))
         return t
     
     def posAngle(self, model_state):
@@ -427,7 +446,6 @@ class Env:
         record_time = start_time
         record_time_step = 0
         
-        #print("Actions form network: {}".format(np.asarray(actions).shape))
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
 
         # rescaling the action
@@ -437,7 +455,6 @@ class Env:
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
         dones = self.dones
-    
         
         # position of turtlebot before taking steps
         x_prev = self.x_prev
@@ -445,26 +462,24 @@ class Env:
         distance_to_goals_prv = [None]*self.num_robots
         for i in range(self.num_robots):
             distance_to_goals_prv[i] = sqrt((x_prev[i]-self.target[i][0])**2+(y_prev[i]-self.target[i][1])**2)
-           
-        
+
+
         # Collect previous pheromone data
         state = self.phero_ig.get_msg()
         phero_prev = [phero.data for phero in state.values]
 
         # 1. Move robot with the action input for time_step
         while (record_time_step < time_step):
-            if self.dones[0] == True:
-                self.pub_tb3_0.publish(Twist())
-            else: self.pub_tb3_0.publish(twists[0])
-            if self.dones[1] == True:
-                self.pub_tb3_1.publish(Twist())
-            else: self.pub_tb3_1.publish(twists[1])
-            
+            self.pub_tb3_0.publish(twists[0])
+            self.pub_tb3_1.publish(twists[1])
+
             self.rate.sleep()
             record_time = time.time()
             record_time_step = record_time - start_time
         
-        
+        step_time = time.time()
+        episode_time = step_time - self.reset_timer
+
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
@@ -472,8 +487,7 @@ class Env:
         self.x_prev = x
         self.y_prev = y
 
-        step_time = time.time()
-        episode_time = step_time - self.reset_timer
+        step_timer = time.time()
         reset_time = step_timer - self.reset_timer
         
         # # Log Positions
@@ -484,10 +498,9 @@ class Env:
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x[i], '%0.2f'%y[i]])
             self.log_timer = time.time()
 
-        # 3. Calculate the distance & angle difference to goal \
+        # 3. Calculate the distance & angle difference to goal 
         distance_to_goals = [None]*self.num_robots
         global_angle = [None]*self.num_robots
-        #print("x : {}, y: {}".format(x,y))
         for i in range(self.num_robots):
             distance_to_goals[i] = sqrt((x[i]-self.target[i][0])**2+(y[i]-self.target[i][1])**2)
             global_angle[i] = atan2(self.target[i][1] - y[i], self.target[i][0] - x[i])
@@ -496,7 +509,7 @@ class Env:
         angle_diff = [a_i - b_i for a_i, b_i in zip(global_angle, theta)]
         angle_diff = self.anglepiTopi(angle_diff)
 
-         # 4. Read pheromone (state) from the robot's position
+        # 4. Read pheromone (state) from the robot's position
         state = self.phero_ig.get_msg()
         phero_now = [phero.data for phero in state.values]
         phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
@@ -510,8 +523,8 @@ class Env:
         state_arr = np.hstack((state_arr, np.asarray(angle_diff).reshape(self.num_robots,1)))
         states = state_arr.reshape(self.num_robots, self.state_num)
 
-        # 5. Reward assignment    
-
+        
+        # 5. Reward assignment
         for i in range(self.num_robots):
             if distance_to_goals[i] <= 0.6 and self.dones[i] == False:
                 self.is_goal += 1
@@ -551,6 +564,7 @@ class Env:
             # for i in range(self.num_robots):
             #     dones[i] = False
 
+
         # self.dones = dones
         rewards = [0.0, 0.0]
         #test_time2 = time.time()
@@ -559,11 +573,6 @@ class Env:
         self.ep_len_counter = self.ep_len_counter + 1
         #print("-------------------")
         return range(0, self.num_robots), states, rewards, self.dones, infos, self.isExpDone
-        
-    def print_debug(self):
-
-        # For debugging. return any data you want. 
-        print("Phero Info: {}".format(self.phero_info))
 
 if __name__ == '__main__':
     try:
