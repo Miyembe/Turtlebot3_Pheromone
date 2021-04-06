@@ -6,3 +6,4 @@ src/log/checkpoints/*
 src/DRLbasedController/weights/*
 critic*
 actor*
+.ipynb_checkpoints
