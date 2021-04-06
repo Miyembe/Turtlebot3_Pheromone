@@ -68,11 +68,13 @@ class Node():
         self.is_service_requested = False
         self.theta = 0 
         
+        # Flags & Counters
         self.log_timer = time.clock()
         #self.log_file = open("phero_value.txt", "a+")
         self.is_saved = False
         self.is_loaded = False
         self.is_reset = True # False for reset
+        self.save_counter = 0
 
         for i in range(len(phero)):
             self.pheromone[i].isDiffusion = False
@@ -84,6 +86,10 @@ class Node():
         self.y = [0.0, 0.0]
         self.x_idx = [0, 0]
         self.y_idx = [0, 0]
+
+        # Logging folder
+        
+
 
     def posToIndex(self, x, y):
         phero = self.pheromone
@@ -197,6 +203,7 @@ class Node():
 
         # Pheromone injection (uncomment it when injection is needed)
         ## Two robots inject pheromone in different grids
+        time_inj = time.clock()
         if self.is_phero_inj is True:
             for i in range(len(self.pheromone)):
                 #phero[i].injection(x_idx[i], y_idx[i], 1, 25, self.phero_max)
@@ -208,10 +215,13 @@ class Node():
 
         # Update pheromone matrix in every 0.1s
         time_cur = time.clock()
-        if time_cur-phero[0].step_timer >= 0.1: 
-            phero[0].update(self.phero_min, self.phero_max)
+        if time_cur-phero[0].step_timer >= 0.05: 
+            for i in range(self.num_robots):
+                phero[i].update(self.phero_min, self.phero_max)
+            #print("update period: {}".format(time_cur-phero[0].step_timer))    
             phero[0].step_timer = time_cur
-
+            
+            
         # ========================================================================= #
 	    #                           Save Pheromone                                  #
 	    # ========================================================================= #
@@ -229,6 +239,15 @@ class Node():
         #     self.pheromone.save("foraging_static")
         #     self.is_saved = True
         #     self.is_phero_inj = False
+
+        # Save Pheromone map for every 0.1 s
+        # save_cur = time.clock()
+        # if save_cur - phero[0].save_timer >= 0.1 and self.save_counter < 3:
+        #     elapsed_time = save_cur - phero[0].reset_timer
+        #     for i in range(self.num_robots):
+        #         phero[i].save("{}_{:0.1f}".format(i, elapsed_time))
+        #     phero[0].save_timer = save_cur
+            #print("Save time elapsed: {}".format(time.clock()-save_cur))
 
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
@@ -252,6 +271,8 @@ class Node():
                     self.pheromone[i].reset()
                 #self.pheromone.load("simple_collision_diffused") # you can load any types of pheromone grid
                 print("Pheromone grid reset!")
+                phero[0].reset_timer = time.clock()
+                self.save_counter += 1
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
@@ -263,7 +284,7 @@ class Node():
         x_values = req.x
         y_values = req.y
         x_indices = [None]*len(x_values)
-        y_indices = [None]*len(x_values)
+        y_indices = [None]*len(x_values) 
         for i in range(len(x_values)):
             x_indices[i], y_indices[i] = self.posToIndex(x_values[i], y_values[i])
 
@@ -317,7 +338,7 @@ class Pheromone():
     8. Load Pheromone Grid
     '''
 
-    def __init__(self, name, evaporation, diffusion):
+    def __init__(self, name, evaporation, diffusion, path):
         self.name = name
         self.resolution = 20 # grid cell size = 1 m / resolution
         self.size = 12 # m
@@ -335,6 +356,11 @@ class Pheromone():
         self.update_timer = time.clock()
         self.step_timer = time.clock()
         self.injection_timer = time.clock()
+        self.save_timer = time.clock()
+        self.reset_timer = time.clock()
+
+        # Logging Path
+        self.path = path
 
     def getPhero(self, x, y):
         return self.grid[x, y]
@@ -410,21 +436,29 @@ class Pheromone():
         self.grid = np.zeros((self.num_cell, self.num_cell))
 
     def save(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f:
+        with open(self.path + '/{}.npy'.format(file_name), 'wb') as f:
             np.save(f, self.grid)
-        print("The pheromone matrix {} is successfully saved".format(file_name))
+        #print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open(self.path + '/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         #os.remove('/home/swn/catkin_ws/src/turtlebot3_pheromone/tmp/{}.npy'.format(file_name))
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
+def main():
+
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    path = os.path.join(parent_dir, time_str)
+    os.mkdir(path)
     
-if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone('1', 0.5, 0)
-    Phero2 = Pheromone('2', 0.5, 0)
+    Phero1 = Pheromone('1', 0.5, 0, path)
+    Phero2 = Pheromone('2', 0.5, 0, path)
     Phero = [Phero1, Phero2]
     node1 = Node(Phero)
     rospy.spin()
+    
+if __name__ == "__main__":
+    main()

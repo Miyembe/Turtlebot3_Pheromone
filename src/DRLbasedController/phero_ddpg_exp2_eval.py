@@ -506,13 +506,8 @@ def main():
 			print("trial:" + str(i))
 			_, current_states = game_state.reset() 
 			
-<<<<<<< HEAD
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210331-103450actormodel-810-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210331-103450criticmodel-810-256.h5")
-=======
 			actor_critic.actor_model.load_weights(actor_critic.save_dir + "actormodel-3100-256.h5")
 			actor_critic.critic_model.load_weights(actor_critic.save_dir + "criticmodel-3100-256.h5")
->>>>>>> 3ff318615610a8cada0003331ea4b44c9be42b8f
 			##############################################################################################
 			total_reward = 0
 			

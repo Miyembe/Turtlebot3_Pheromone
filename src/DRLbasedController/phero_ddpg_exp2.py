@@ -111,8 +111,9 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights/" + self.time_str
-		
+		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.path = os.path.join(self.parent_dir, self.time_str)
+		os.mkdir(self.path)
 		# ===================================================================== #
 		#                               Actor Model                             #
 		# Chain rule: find the gradient of chaging the actor network params in  #
@@ -326,8 +327,8 @@ class ActorCritic:
 	# ========================================================================= #
 
 	def save_weight(self, num_trials, trial_len):
-		self.actor_model.save_weights('actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
-		self.critic_model.save_weights('criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
+		self.actor_model.save_weights(self.path + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
+		self.critic_model.save_weights(self.path + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
 	def play(self, cur_state):
 		return self.actor_model.predict(cur_state)
@@ -351,6 +352,8 @@ def main(args):
 	log_interval = 5
 	train_indicator = 1
 	tfirststart = time.time()
+	
+	
 
 	# Reward Logging
 	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
@@ -518,8 +521,8 @@ def main(args):
 			print("trial:" + str(i))
 			current_state = game_state.reset()
 			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + time_str + "actormodel-2950-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + time_str + "criticrmodel-2950-256.h5")
+			actor_critic.actor_model.load_weights(path + "actormodel-2950-256.h5")
+			actor_critic.critic_model.load_weights(path + "criticrmodel-2950-256.h5")
 			##############################################################################################
 			total_reward = 0
 			
