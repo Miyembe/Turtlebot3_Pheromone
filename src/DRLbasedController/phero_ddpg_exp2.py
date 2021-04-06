@@ -33,6 +33,7 @@ import math
 import time
 import matplotlib.pyplot as plt
 import scipy.io as sio
+import argparse
 
 import logger
 
@@ -334,7 +335,7 @@ class ActorCritic:
 def safemean(xs):
        return np.nan if len(xs) == 0 else np.mean(xs)
 
-def main():
+def main(args):
 	time_str = time.strftime("%Y%m%d-%H%M%S")
 	logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
 	board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
@@ -343,8 +344,9 @@ def main():
 	########################################################
 	game_state= phero_turtlebot_exp2.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
+	random.seed(args.random_seed)
 	########################################################
-	num_trials = 5000
+	num_trials = 1500
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1
@@ -558,5 +560,13 @@ def main():
 
 
 if __name__ == "__main__":
-	main()
+	parser = argparse.ArgumentParser()
+	args = parser.parse_args("")
+	args.exp_name = "exp_random_seed"
+	name_var = 'random_seed'
+	list_var = [1, 20, 65, 101, 236]
+	for var in list_var:
+		setattr(args, name_var, var)
+		print(args)
+		main(args)
 
