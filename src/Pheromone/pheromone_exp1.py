@@ -305,12 +305,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

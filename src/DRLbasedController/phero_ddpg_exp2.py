@@ -353,8 +353,6 @@ def main(args):
 	train_indicator = 1
 	tfirststart = time.time()
 	
-	
-
 	# Reward Logging
 	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -424,8 +422,6 @@ def main(args):
 				###########################################################################################
 				#print('wanted value is %s:', game_state.observation_space.shape[0])
 				current_states = current_states.reshape((num_robots, game_state.observation_space.shape[0]))
-				''' how can I solve this? using for loop iterating over num_robots?''' 
-                # num_robots
 				actions = []
 				for k in range(num_robots):
 					action, eps = actor_critic.act(current_states[k])

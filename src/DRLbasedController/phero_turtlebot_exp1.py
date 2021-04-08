@@ -290,7 +290,8 @@ class Env:
         state_arr = np.append(state_arr, angle_diff)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
-        state = state_arr.reshape(1, self.state_num)
+        state = state_arr.reshape(self.state_num)
+        print("state: {}".format(state.shape))
 
         # 5. Reward assignment
         ## 5.0. Initialisation of rewards

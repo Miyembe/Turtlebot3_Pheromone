@@ -449,7 +449,7 @@ class Pheromone():
 def main():
 
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    parent_dir = "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
     path = os.path.join(parent_dir, time_str)
     os.mkdir(path)
     
