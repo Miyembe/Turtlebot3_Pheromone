@@ -3,7 +3,7 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-sys.path.append('/home/swn/catkin_ws/src/Turtlebot3_Pheromone')
+sys.path.append('/home/sub/catkin_ws/src/Turtlebot3_Pheromone')
 import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
@@ -122,8 +122,8 @@ class Node():
         a_r_index_x, a_r_index_y = self.posToIndex(antennae_pos_r[0], antennae_pos_r[1])
 
         # Get the pheromone values at the position of antennae and publish
-        phero_val.data.append(self.pheromone.getPhero(a_l_index_x, a_l_index_y))
-        phero_val.data.append(self.pheromone.getPhero(a_r_index_x, a_r_index_y))
+        phero_val.data.append(self.pheromone.getPhero(int(a_l_index_x), int(a_l_index_y)))
+        phero_val.data.append(self.pheromone.getPhero(int(a_r_index_x), int(a_r_index_y)))
         self.pub_phero.publish(phero_val)
 
 
@@ -305,12 +305,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

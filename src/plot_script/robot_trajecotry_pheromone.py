@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import math
+import time
+import os
 from IPython import display
 
 
@@ -59,7 +61,10 @@ def plot_trajectory(x, y):
 
 def plot_anim(n_frames):
     # plot images continuously as background.
-    
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/plot_script"
+    path = os.path.join(parent_dir, time_str)
+    os.mkdir(path)
     n = 2
     grids = []
     x, y, yaw = robot_poses(n_frames)
@@ -81,8 +86,9 @@ def plot_anim(n_frames):
         y_traj.append(y[i])
         plot_trajectory(x_traj, y_traj)
 
-        #ax.plot(x[i], y[i], 'o', color='firebrick')
-
+        # Figure saving
+        extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        fig.savefig(path + '/{}_{}.png'.format(time_str, i), bbox_inches=extent)
         plt.pause(0.05)
         plt.cla()
 
