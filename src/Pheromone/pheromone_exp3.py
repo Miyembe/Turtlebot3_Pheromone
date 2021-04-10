@@ -470,7 +470,7 @@ class Pheromone():
         '''
         Save the current matrix as a numpy object
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # 
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # 
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
@@ -478,7 +478,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 

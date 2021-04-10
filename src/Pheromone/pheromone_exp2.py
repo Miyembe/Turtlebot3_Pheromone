@@ -3,7 +3,7 @@
 # Subscriber - Robot (x, y) position
 # Publisher - Pheromone value at (x, y)
 import sys
-sys.path.append('/home/swn/catkin_ws/src/Turtlebot3_Pheromone')
+sys.path.append('/home/sub/catkin_ws/src/Turtlebot3_Pheromone')
 import roslib; roslib.load_manifest('turtlebot3_pheromone')
 import os
 import numpy as np
@@ -16,6 +16,7 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
+import csv
 from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
@@ -87,8 +88,11 @@ class Node():
         self.x_idx = [0, 0]
         self.y_idx = [0, 0]
 
-        # Logging folder
-        
+        # Logging
+        self.file_name = "pose_{}".format(self.num_robots)
+        with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
 
 
     def posToIndex(self, x, y):
@@ -127,6 +131,7 @@ class Node():
 
     def pheroCallback(self, message, cargs):
         
+        start_time = time.time()
         for i in range(len(message.name)):
             if message.name[i] == 'tb3_0':
                 tb3_0 = i
@@ -241,14 +246,23 @@ class Node():
         #     self.is_phero_inj = False
 
         # Save Pheromone map for every 0.1 s
-        # save_cur = time.clock()
-        # if save_cur - phero[0].save_timer >= 0.1 and self.save_counter < 3:
-        #     elapsed_time = save_cur - phero[0].reset_timer
-        #     for i in range(self.num_robots):
-        #         phero[i].save("{}_{:0.1f}".format(i, elapsed_time))
-        #     phero[0].save_timer = save_cur
-            #print("Save time elapsed: {}".format(time.clock()-save_cur))
+        save_cur = time.clock()
+        if save_cur - phero[0].save_timer >= 0.1 and self.save_counter < 4:
+            elapsed_time = save_cur - phero[0].reset_timer
+            for i in range(self.num_robots):
+                phero[i].save("{}_{:0.1f}".format(i, elapsed_time))
+                if self.save_counter == 3:
+                    with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                        csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
+                                             '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])
 
+
+            phero[0].save_timer = save_cur
+            print("Save time elapsed: {}".format(time.clock()-save_cur))
+
+        end_time = time.time()
+        print("update time: {}".format(end_time - start_time))
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
 	    # ========================================================================= #
@@ -443,13 +457,13 @@ class Pheromone():
     def load(self, file_name):
         with open(self.path + '/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
-        #os.remove('/home/swn/catkin_ws/src/turtlebot3_pheromone/tmp/{}.npy'.format(file_name))
+        #os.remove('/home/sub/catkin_ws/src/turtlebot3_pheromone/tmp/{}.npy'.format(file_name))
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
 def main():
 
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    parent_dir = "/home/swn/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
     path = os.path.join(parent_dir, time_str)
     os.mkdir(path)
     
