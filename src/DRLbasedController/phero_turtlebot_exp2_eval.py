@@ -464,7 +464,9 @@ class Env:
             record_time = time.time()
             record_time_step = record_time - start_time
         
-        
+        step_time = time.time()
+        episode_time = step_time - self.reset_timer
+
         # 2. Read the position and angle of robot
         model_state = self.pose_ig.get_msg()
         self.model_state = model_state
@@ -472,8 +474,7 @@ class Env:
         self.x_prev = x
         self.y_prev = y
 
-        step_time = time.time()
-        episode_time = step_time - self.reset_timer
+        step_timer = time.time()
         reset_time = step_timer - self.reset_timer
         
         # # Log Positions
