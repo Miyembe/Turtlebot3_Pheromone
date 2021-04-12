@@ -60,7 +60,7 @@ class ExperienceReplayBuffer:
 	def __init__ (self,
 				  total_timesteps=100000,
 				  buffer_size=50000,
-				  type_buffer="PER",
+				  type_buffer="HER",
 				  prioritized_replay=True,
 				  prioritized_replay_alpha=0.6,
 				  prioritized_replay_beta0=0.4,
