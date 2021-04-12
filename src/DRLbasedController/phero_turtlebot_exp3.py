@@ -305,10 +305,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.3
+        t.linear.x = action[1]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = min(pi/2, max(-pi/2, action[1]*0.6))
+        t.angular.z = min(pi/2, max(-pi/2, action[0]))
         return t
     
     def posAngle(self, model_state):

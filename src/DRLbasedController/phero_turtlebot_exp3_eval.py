@@ -404,10 +404,10 @@ class Env:
         t = Twist()
 
         # Rescale and clipping the actions
-        t.linear.x = action[0]*0.26
+        t.linear.x = action[1]*0.3
         t.linear.x = min(1, max(-1, t.linear.x))
         
-        t.angular.z = action[1]
+        t.angular.z = min(pi/2, max(-pi/2, action[0]))
         return t
     
     def posAngle(self, model_state):
@@ -596,9 +596,6 @@ class Env:
                 goal_rewards[i] = 100.0
                 self.is_goal += 1
                 dones[i] = True
-
-            
-        
 
         ## 6.4. Angular speed penalty
         for i in range(self.num_robots):

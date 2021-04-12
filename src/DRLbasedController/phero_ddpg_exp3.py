@@ -124,7 +124,7 @@ class ActorCritic:
 		# Replay buffer
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
-		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="PER")
+		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name ="reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		
@@ -270,8 +270,8 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 

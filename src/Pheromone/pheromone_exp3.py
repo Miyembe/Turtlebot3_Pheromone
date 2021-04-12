@@ -16,6 +16,7 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
+import csv
 from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
@@ -49,18 +50,19 @@ class Antennae():
 
 class Node():
 
-    def __init__(self):
+    def __init__(self, path):
 
         # Assigning num_robots
         self.num_robots = 4
+        self.num_obs = 1
         print("num_robots: {}".format(self.num_robots))
 
         # Pheromone initialization
         self.pheromone = [None]*self.num_robots
         for i in range(self.num_robots):
-            self.pheromone[i] = Pheromone('dynamic {}'.format(i), size = 12, res = 10, evaporation = 0.5, diffusion = 0)
+            self.pheromone[i] = Pheromone('dynamic {}'.format(i), path=path, size = 12, res = 10, evaporation = 0.5, diffusion = 0, )
             self.pheromone[i].isDiffusion = False
-        phero_static = Pheromone('static', size = 12, res = 10, evaporation = 180, diffusion = 0)
+        phero_static = Pheromone('static', path=path, size = 12, res = 10, evaporation = 180, diffusion = 0)
         phero_static.isDiffusion = False
         phero_static.isEvaporation = False
         self.pheromone.append(phero_static)
@@ -86,6 +88,8 @@ class Node():
         self.is_saved = False
         self.is_loaded = False
         self.is_reset = True # False for reset
+        self.save_counter = 0
+        self.path = path
 
         for i in range(self.num_robots):
             self.pheromone[i].isDiffusion = False
@@ -96,6 +100,12 @@ class Node():
         self.positions = [0.0, 0.0]*self.num_robots
         self.x_idx = [0, 0]
         self.y_idx = [0, 0]
+
+        # Logging
+        self.file_name = "pose_{}".format(self.num_robots)
+        with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
 
         print("Initialisation completed")
 
@@ -154,6 +164,7 @@ class Node():
         x = float(x) / phero.resolution 
         
     def pheroCallback(self, message):
+        start_time = time.time()
         #tb3 = [None]*self.num_robots
 
         for i in range(len(message.name)):
@@ -204,7 +215,7 @@ class Node():
         phero_arr = [Float32MultiArray()]*self.num_robots
         phero_val = [None] * self.num_robots
 
-        static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name][0]
+        static_phero = [phero_st for phero_st in self.pheromone if 'static' in phero_st.name]
 
         for i in range(self.num_robots):
             antennae_pos[i] = np.array(robot_antennae.position(robot_pose[i]))
@@ -215,12 +226,13 @@ class Node():
                 
                 #phero_val[i].append(self.pheromone[1-i].getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]))
                 # Dynamic Pheromone Reading
-                phero_sum = sum([phero_dy.getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]) for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%i not in phero_dy.name)])
+                phero_sum = sum([phero_dy.getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1]) 
+                                for phero_dy in self.pheromone if ('dynamic' in phero_dy.name) and ("%d"%i not in phero_dy.name)])
                 phero_name = []
                 phero_val[i].append(phero_sum) 
 
                 # Static Pheromone Reading
-                phero_val[i][j] += static_phero.getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1])
+                phero_val[i][j] += static_phero[0].getPhero(antennae_idx[i][j][0], antennae_idx[i][j][1])
                 phero_val[i][j] = min(self.phero_max, max(self.phero_min, phero_val[i][j]))
             phero_arr[i].data = phero_val[i]
 
@@ -310,6 +322,27 @@ class Node():
         #     self.is_saved = True
         #     self.is_phero_inj = False
 
+        # Save Pheromone map for every 0.1 s
+        save_cur = time.clock()
+        #print("Save_counter:{}".format(self.save_counter))
+        if save_cur - phero[0].save_timer >= 0.1 and self.save_counter == 3:
+            elapsed_time = save_cur - phero[0].reset_timer
+            for i in range(self.num_robots):
+                self.pheromone[i].save("{}_{:0.1f}".format(i, elapsed_time))
+                with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
+                                         '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])    
+                print("x_{}, y_{}: ({}, {})".format(i,i,x_idx[i],y_idx[i]))
+            for i in range(self.num_obs):
+                static_phero[i].save(("st_{}_{:0.1f}".format(i, elapsed_time)))
+            phero[0].save_timer = save_cur
+            
+            #print("Save time elapsed: {}".format(time.clock()-save_cur))
+
+        end_time = time.time()
+        #print("update time: {}".format(end_time - start_time))
+
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
 	    # ========================================================================= #
@@ -332,7 +365,8 @@ class Node():
                     self.pheromone[i].reset()
                     if 'static' in self.pheromone[i].name:
                         self.pheromone[i].load('tcds_exp3') # you can load any types of pheromone grid
-                print("Pheromone grid reset!")
+                phero[0].reset_timer = time.clock()
+                self.save_counter += 1
                 self.is_reset = False           # Reset the flag for next use
             except IOError as io:
                 print("No pheromone to load: %s"%io)
@@ -372,7 +406,7 @@ class Pheromone():
     8. Load Pheromone Grid
     '''
 
-    def __init__(self, name, size = 10, res = 10, evaporation = 0.0, diffusion = 0.0):
+    def __init__(self, name, path, size = 10, res = 10, evaporation = 0.0, diffusion = 0.0):
         self.name = name
         self.resolution = res # grid cell size = 1 m / resolution
         self.size = size # m
@@ -390,6 +424,10 @@ class Pheromone():
         self.update_timer = time.clock()
         self.step_timer = time.clock()
         self.injection_timer = time.clock()
+        self.save_timer = time.clock()
+        self.reset_timer = time.clock()
+
+        self.path = path
 
     def getPhero(self, x, y):
         return self.grid[x, y]
@@ -470,9 +508,9 @@ class Pheromone():
         '''
         Save the current matrix as a numpy object
         '''
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # 
+        with open(self.path + '/{}.npy'.format(file_name), 'wb') as f: # 
             np.save(f, self.grid)
-        print("The pheromone matrix {} is successfully saved".format(file_name))
+        #print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
         '''
@@ -485,7 +523,12 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    node1 = Node()
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    path = os.path.join(parent_dir, time_str)
+    os.mkdir(path)
+
+    node1 = Node(path)
     rospy.spin()
         
 

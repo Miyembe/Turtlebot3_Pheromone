@@ -10,7 +10,7 @@ from IPython import display
 fig, ax = plt.subplots()
 # Basic Plotting functions
 
-def plot_arrow(x, y, yaw, length=12.0, width=10, fc="y", ec="r"):
+def plot_arrow(x, y, yaw, length=3.0, width=4.0, fc="r", ec="y"):
     """
     Plotting Arrow
     """
@@ -27,13 +27,24 @@ def plot_arrow(x, y, yaw, length=12.0, width=10, fc="y", ec="r"):
         ax.plot(x, y)
 
 def plot_triangle(x, y, yaw, length=12.0, width=10, fc="y", ec="r"):
-    if not isinstance(x, float):
-        for (ix, iy, iyaw) in zip(x,y,yaw):
-            ax.arrow(ix, iy, iyaw)
+    if not isinstance(x, float) and not isinstance(x, int):
+        #print("x: {}".format(x))
+        #print("type x: {}".format(type(x)))
+        ax.plot(x, y, marker=(3, 0, 180*yaw/math.pi), markersize=20, linestyle='None', linewidth=10)
     else:
         #ax.arrow(x, y, length * math.cos(yaw), length*math.sin(yaw),
         #          fc=fc, ec=ec, head_width=width, head_length=width)
         ax.plot(x, y, marker=(3, 0, 180*yaw/math.pi), markersize=20, linestyle='None', linewidth=10)
+
+def plot_circle(x, y, yaw, length=12.0, width=10, fc="y", ec="r"):
+    if not isinstance(x, float) and not isinstance(x, int):
+        #print("x: {}".format(x))
+        #print("type x: {}".format(type(x)))
+        ax.plot(x, y, marker='o', markersize=10, linestyle='None', linewidth=10)
+    else:
+        #ax.arrow(x, y, length * math.cos(yaw), length*math.sin(yaw),
+        #          fc=fc, ec=ec, head_width=width, head_length=width)
+        ax.plot(x, y, marker='o', markersize=10, linestyle='None', linewidth=10)
         
 def plot_trajectory(x, y):
     ax.plot(x,y, "-r", label="trajectory")
@@ -53,12 +64,13 @@ class PheroPlot():
     '''
     def __init__(self):
         
-        self.num_robots = 2
+        self.num_robots = 4
+        self.num_obs = 1
 
         # Reading
-        self.path = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/20210409-145642"
+        self.path = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/20210412-110658"
         self.num_files = len([name for name in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, name))])
-        self.num_phero = (self.num_files-1)/2
+        self.num_phero = int((self.num_files-1)/(self.num_robots+self.num_obs))
         self.skip_count = 0
         self.time_step = 0.1
         
@@ -72,23 +84,34 @@ class PheroPlot():
     def pherogrid(self, t):
         # n - num of robots (int)
         # time - time_step (int)
-        grids = [None]*self.num_robots
-        for i in range(self.num_robots):
-            while not os.path.isfile(os.path.join(self.path, '{}_{}.npy'.format(i, (t+self.skip_count)*self.time_step))):
-                self.skip_count += 1
-                print("Counter++")
-                time.sleep(0.5)
-                
-            with open(self.path + '/{}_{}.npy'.format(i, (t+self.skip_count)*self.time_step), 'rb') as f:
-                grids[i] = np.load(f)
-        sum_grids = np.maximum(grids[0], grids[1])
+        grids = [None]*(self.num_robots+self.num_obs)
+
+        # Pheromone map for dynamic obstacles
+        if self.num_robots > 0:
+            for i in range(self.num_robots):
+                while not os.path.isfile(os.path.join(self.path, '{}_{:0.1f}.npy'.format(i, (t+self.skip_count)*self.time_step))):
+                    self.skip_count += 1
+                    print("Counter++")
+                    time.sleep(0.5)
+                    
+                with open(self.path + '/{}_{:0.1f}.npy'.format(i, (t+self.skip_count)*self.time_step), 'rb') as f:
+                    grids[i] = np.load(f)
+        
+        # Pheromone map for static obstacles
+        if self.num_obs > 0:
+            for i in range(self.num_obs):       
+                with open(self.path + '/st_{}_{:0.1f}.npy'.format(i, (t+self.skip_count)*self.time_step), 'rb') as f:
+                    grids[self.num_robots + i] = np.load(f)
+                    
+        print("num_grid: {}".format(len(grids)))
+        sum_grids = np.maximum.reduce([grid for grid in grids])
         phero_time = (t + self.skip_count)*self.time_step 
         return sum_grids, round(phero_time, 1)
     
     def robot_poses(self, times):
-        df = pd.read_csv(os.path.join(self.path, 'pose_2.csv'))
+        df = pd.read_csv(os.path.join(self.path, 'pose_{}.csv'.format(self.num_robots)))
         data_poses = df.set_index(['time', 'ID'])
-        print("data_poses: {}".format(data_poses))
+        #print("data_poses: {}".format(data_poses))
         x = [[] for i in range(self.num_robots)]
         y = [[] for i in range(self.num_robots)]
         yaw = [[] for i in range(self.num_robots)]
@@ -106,10 +129,12 @@ class PheroPlot():
         grids = []
         phero_times = []
         print("wow")
-        for i in range(1, self.num_phero+1):
+        for i in range(self.num_phero):
+            
             grid, phero_time = self.pherogrid(i)
-            grids.append(grid)
+            grids.append(np.flipud(grid))
             phero_times.append(phero_time)
+            print("num_phero: {}".format(self.num_phero))
             print("phero_time: {}".format(phero_time))
 
         x, y, yaw = self.robot_poses(phero_times)
@@ -135,7 +160,7 @@ class PheroPlot():
 
             # Figure saving
             extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-            fig.savefig(self.save_path + '/{}_{}.png'.format(self.time_str, i), bbox_inches=extent)
+            fig.savefig(self.save_path + '/{}_{}.png'.format(self.time_str, i), dpi=300, bbox_inches=extent)
             plt.pause(0.1)
             plt.cla()
 
