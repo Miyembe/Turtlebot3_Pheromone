@@ -336,7 +336,7 @@ def main(args):
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################
-	num_trials = 1500
+	num_trials = 700
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1
@@ -533,7 +533,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [1, 20, 65]
+	list_var = [20, 65]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)
