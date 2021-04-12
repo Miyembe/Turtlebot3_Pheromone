@@ -7,4 +7,5 @@ src/DRLbasedController/weights/*
 critic*
 actor*
 .ipynb_checkpoints
+src/plot_script/2021*
 tmp/2021*
