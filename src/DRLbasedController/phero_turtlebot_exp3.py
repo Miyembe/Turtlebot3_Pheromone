@@ -488,7 +488,7 @@ class Env:
             if distance_to_goals[i] <= 0.5:
                 goal_rewards[i] = 100.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
 
             
         
@@ -542,7 +542,7 @@ class Env:
         for i in range(self.num_robots):
             if abs(x[i]) >= 5.4 or abs(y[i]) >= 5.4:
                 if distance_to_goals[i] > 6:
-                    ooa_rewards[i] = -30.0
+                    ooa_rewards[i] = 0.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
             
