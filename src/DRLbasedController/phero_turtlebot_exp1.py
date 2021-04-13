@@ -107,7 +107,7 @@ class Env:
         self.target_y = 0.0
         self.target_index = 0
         self.radius = 4
-        self.num_experiments = 20
+        self.num_experiments = 4
         
         # Last robot positions (to use for stuck indicator)
         self.last_x = 0.0
