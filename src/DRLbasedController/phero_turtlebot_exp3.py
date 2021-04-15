@@ -294,7 +294,7 @@ class Env:
             print("Reset Pheromone grid successfully: {}".format(resp))
         except rospy.ServiceException as e:
             print("Service Failed %s"%e)
-        self.dones = [False] * self.num_robots
+        #self.dones = [False] * self.num_robots
 
         return range(0, self.num_robots), initial_state
 
@@ -380,6 +380,10 @@ class Env:
         start_time = time.time()
         record_time = start_time
         record_time_step = 0
+
+        # Check if the robots are terminated
+        dones = self.dones
+        is_stops = dones
         
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
 
@@ -387,11 +391,13 @@ class Env:
         for i in range(len(twists)):
             twists[i].linear.x = (twists[i].linear.x+1) * 1/2  # only forward motion
             twists[i].angular.z = twists[i].angular.z
+            if is_stops[i] == True:
+                twists[i] = Twist()
         
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
-        dones = self.dones
         
+
         # position of turtlebot before taking steps
         x_prev = self.x_prev
         y_prev = self.y_prev
@@ -488,7 +494,7 @@ class Env:
             if distance_to_goals[i] <= 0.5:
                 goal_rewards[i] = 100.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
 
             
         
@@ -525,11 +531,11 @@ class Env:
                 print("Collision! Robot: {}".format(i))
                 collision_rewards[i] = -100.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
             elif distance_to_obstacle[i] < 0.3:
                 collision_rewards[i] = -100.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
         
         ## 6.7. Time penalty
         #  constant time penalty for faster completion of episode
@@ -542,9 +548,9 @@ class Env:
         for i in range(self.num_robots):
             if abs(x[i]) >= 5.4 or abs(y[i]) >= 5.4:
                 if distance_to_goals[i] > 6:
-                    ooa_rewards[i] = -30.0
+                    ooa_rewards[i] = 0.0
                 dones[i] = True
-                self.reset(model_state, id_bots=idx[i])
+                #self.reset(model_state, id_bots=idx[i])
             
         
 
@@ -571,12 +577,9 @@ class Env:
                 dones[i] = False
 
         self.dones = dones
-        #print("distance reward: {}".format(distance_reward*(3/time_step)))
-        #print("phero_reward: {}".format(phero_reward))
-        # if linear_x > 0.05 and angular_z > 0.05 and abs(distance_reward) > 0.005:
-        #     self.stuck_indicator = 0
-        rewards = [a+b+c+d+e+f+g+h for a, b, c, d, e, f, g, h in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards, ooa_rewards)]
         
+
+        rewards = [a+b+c+d+e+f+g+h for a, b, c, d, e, f, g, h in zip(distance_rewards, phero_rewards, goal_rewards, angular_punish_rewards, linear_punish_rewards, collision_rewards, time_rewards, ooa_rewards)]
         test_time2 = time.time()
         rewards = np.asarray(rewards).reshape(self.num_robots)
         infos = [{"episode": {"l": self.ep_len_counter, "r": rewards}}]
@@ -596,8 +599,9 @@ class Env:
         print("Reward: {}".format(rewards))
         print("Time diff: {}".format(test_time-test_time2))
         
+
         #print("state: {}, action:{}, reward: {}, done:{}, info: {}".format(state, action, reward, done, info))
-        return range(0, self.num_robots), states, rewards, dones, infos
+        return range(0, self.num_robots), states, rewards, dones, infos, is_stops
         
     def print_debug(self):
 

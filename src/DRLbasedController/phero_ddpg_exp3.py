@@ -41,6 +41,7 @@ import logger
 
 def stack_samples(samples):
 	
+	
 	current_states = np.asarray(samples[0])
 	actions = np.asarray(samples[1])
 	rewards = np.asarray(samples[2])
@@ -48,6 +49,8 @@ def stack_samples(samples):
 	dones = np.asarray(samples[4])
 	weights = np.asarray(samples[5])
 	batch_idxes = np.asarray(samples[6])
+	
+	#print("new_states: {}, shape: {}, type: {}".format(new_states, new_states.shape, type(new_states)))
 	#before_current_states = np.stack(array[:,0])
 	# current_states = np.stack(array[:,0]).reshape((array.shape[0],-1))
 	# actions = np.stack(array[:,1]).reshape((array.shape[0],-1))
@@ -210,7 +213,9 @@ class ActorCritic:
 
    		# 1, sample
 		# cur_states, actions, rewards, new_states, done = stack_samples(samples)
+		#print("samples: {}, shape: {}".format(samples, np.asarray(samples).shape))
 		cur_states, actions, rewards, new_states, dones, weights, batch_idxes = stack_samples(samples) # PER version also checks if I need to use stack_samples
+		print("new_states: {}, shape: {}, type: {}".format(new_states, new_states.shape, type(new_states)))
 		target_actions = self.target_actor_model.predict(new_states)
 		future_rewards = self.target_critic_model.predict([new_states, target_actions])
 		rewards = rewards + self.gamma*future_rewards.reshape(future_rewards.shape[0]) * (1 - dones)
@@ -360,6 +365,7 @@ def main(args):
 
 	# Double ended queue with max size 100 to store episode info
 	epinfobuf = deque(maxlen=100)
+	reward_buf = deque(maxlen=100)
 
 	
 
@@ -417,6 +423,7 @@ def main(args):
 			##############################################################################################
 			#total_reward = 0
 			epinfos = []
+			reward_infos = []
 			for j in range(trial_len):
 				
 				###########################################################################################
@@ -430,7 +437,7 @@ def main(args):
 				actions = np.squeeze(np.asarray(actions))
 				#print("Actions: {}".format(actions))    
 				#print("action is speed: %s, angular: %s", action[0][1], action[0][0])
-				_, new_states, rewards, dones, infos = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				_, new_states, rewards, dones, infos, is_stops = game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				#print("Rewards: {}".format(rewards))
 				#total_reward = total_reward + reward
 				###########################################################################################
@@ -470,16 +477,51 @@ def main(args):
 				# print shape of current_state
 				#print("current_state is %s", current_state)
 				##########################################################################################
-				actor_critic.remember(current_states, actions, rewards, new_states, dones)
-				actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
+				
+				# Store only non-terminal transition samples.
+				
+				#actor_critic.remember(current_states, actions, rewards, new_states, dones) # For uniform replay buffer
+				state_sample = []
+				action_sample = []
+				reward_sample = []
+				new_state_sample = []
+				done_sample = []
+				non_stop_counter = 0
+				for i in range(num_robots):
+					if is_stops[i] == False:
+						#print("current_states[i]: {}, shape: {}".format(current_states[i], current_states[i].shape))
+						state_sample.append(current_states[i])
+						action_sample.append(actions[i])
+						reward_sample.append(rewards[i])
+						new_state_sample.append(new_states[i])
+						done_sample.append(dones[i])
+						#non_stop_counter += 1
+				#print("state_sample: {}".format(state_sample))
+				#print("array_state_sample: {}, shape: {}".format(np.array(state_sample), np.array(state_sample).shape))
+				#print("current_states: {}, shape: {}".format(current_states, current_states.shape))
+				state_sample = np.asarray(state_sample)
+				action_sample = np.asarray(action_sample)
+				reward_sample = np.asarray(reward_sample)
+				new_state_sample = np.asarray(new_state_sample)
+				done_sample = np.asarray(done_sample)
+				#print("state_sample: {}, shape: {}".format(state_sample, state_sample.shape))
+				actor_critic.replay_buffer.add(state_sample, action_sample, 
+											   reward_sample, new_state_sample,
+											   done_sample)
+				#print("state_sample: {}".format(np.asarray(state_sample)))
+				#print("current_states: {}".format(current_states.shape))
+				#actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
 				current_states = new_states
 
-
+				reward_infos.append(reward_sample)
 				
 				##########################################################################################
 			if (i % 10==0):
 				actor_critic.save_weight(i, trial_len)
+			
+
 			epinfobuf.extend(epinfos)
+			reward_buf.extend(reward_infos)
 			tnow = time.time()
 			#fps = int(nbatch / (tnow - tstart))
 			
@@ -489,7 +531,8 @@ def main(args):
 
 			if i % log_interval == 0 or i == 0:
 				#ev = explained_variance(values, returns)
-				reward_mean = safemean([epinfo['r'] for epinfo in epinfobuf])
+				#reward_mean = safemean([epinfo['r'] for epinfo in epinfobuf])
+				reward_mean = safemean([reward_info for reward_info in reward_buf])
 				logger_ins.logkv("serial_timesteps", i*trial_len)
 				logger_ins.logkv("nupdates", i)
 				logger_ins.logkv("total_timesteps", i*trial_len)
@@ -563,7 +606,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [1, 20, 65, 101, 236]
+	list_var = [65, 101, 236]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)

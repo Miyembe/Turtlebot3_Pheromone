@@ -22,7 +22,7 @@ class ReplayBuffer(object):
 
     def add(self, obs_t, action, reward, obs_tp1, done):
         # 20210325 np array case added
-        if obs_t.shape[0] > 1:
+        if obs_t.shape[0] >= 1:
             for i in range(obs_t.shape[0]):
                 data = (obs_t[i], action[i], reward[i], obs_tp1[i], done[i])
                 if self._next_idx >= len(self._storage):

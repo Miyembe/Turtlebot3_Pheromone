@@ -10,7 +10,7 @@ from IPython import display
 fig, ax = plt.subplots()
 # Basic Plotting functions
 
-def plot_arrow(x, y, yaw, length=3.0, width=4.0, fc="r", ec="y"):
+def plot_arrow(x, y, yaw, length=0.1, width=3.5, fc="r", ec="y"):
     """
     Plotting Arrow
     """
@@ -47,7 +47,7 @@ def plot_circle(x, y, yaw, length=12.0, width=10, fc="y", ec="r"):
         ax.plot(x, y, marker='o', markersize=10, linestyle='None', linewidth=10)
         
 def plot_trajectory(x, y):
-    ax.plot(x,y, "-r", label="trajectory")
+    ax.plot(x,y, '--', color='indianred', label="trajectory")
 
 
 
@@ -139,8 +139,8 @@ class PheroPlot():
 
         x, y, yaw = self.robot_poses(phero_times)
         print("0x0: {}".format(x))
-        x_traj, y_traj = [], []
-        for i in range(self.num_phero):
+        x_traj, y_traj = [[] for i in range(self.num_robots)], [[] for i in range(self.num_robots)]
+        for i in range(1, self.num_phero):
 
             # Plotting Pheromone
             ax.imshow(grids[i])
@@ -154,9 +154,10 @@ class PheroPlot():
             #            [yaw[j][i] for j in range(self.num_robots)])
 
             # Plotting Robot trajectory
-            #x_traj.append(x[i])
-            #y_traj.append(y[i])
-            #plot_trajectory(x_traj, y_traj)
+            for j in range(self.num_robots):
+                x_traj[j].append(x[j][i])
+                y_traj[j].append(y[j][i])
+                plot_trajectory(x_traj[j], y_traj[j])
 
             # Figure saving
             extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
