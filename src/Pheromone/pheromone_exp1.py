@@ -16,13 +16,20 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
 from math import *
 import time
+import csv
 from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 class Node():
 
-    def __init__(self, phero):
-        self.pheromone = phero
+    def __init__(self, path):
+
+        # Assigning num_robots
+        self.num_robots = 1
+        self.num_obs = 1
+
+
+        self.pheromone = Pheromone('Static', path=path, evaporation=180)
         self.phero_max = 1.0
         self.phero_min = 0.0
         self.is_phero_inj = True
@@ -43,10 +50,19 @@ class Node():
         self.is_saved = False
         self.is_loaded = False
         self.is_reset = True # False for reset
+        self.save_counter = 0
+        self.path = path
 
-        self.pheromone.isDiffusion = True
+
+        self.pheromone.isDiffusion = False
         self.pheromone.isEvaporation = False
         self.startTime = time.time()
+
+        # Logging
+        self.file_name = "pose_{}".format(self.num_robots)
+        with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
 
         
 
@@ -93,6 +109,7 @@ class Node():
         phero = cargs
         x = pos.x
         y = pos.y
+        x_idx, y_idx = self.posToIndex(x, y)
 
         angles = tf.transformations.euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))
         if angles[2] < 0:
@@ -177,6 +194,21 @@ class Node():
         #     self.is_saved = True
         #     self.is_phero_inj = False
 
+        # Save Pheromone map for every 0.1 s
+        save_cur = time.clock()
+        #print("Save_counter:{}".format(self.save_counter))
+        if save_cur - phero.save_timer >= 0.1 and self.save_counter == 3:
+            elapsed_time = save_cur - phero.reset_timer
+            for i in range(self.num_robots):
+                self.pheromone.save("{}_{:0.1f}".format(i, elapsed_time))
+                with open(self.pheromone.path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
+                                         '{}'.format(x_idx), '{}'.format(y_idx), '{}'.format(theta)])    
+                print("x_{}, y_{}: ({}, {})".format(i,i,x_idx,y_idx))
+            phero.save_timer = save_cur
+            
+
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
 	    # ========================================================================= #
@@ -234,9 +266,9 @@ class Pheromone():
     8. Load Pheromone Grid
     '''
 
-    def __init__(self, evaporation, diffusion):
-        self.resolution = 10 # grid cell size = 1 m / resolution
-        self.size = 10 # m
+    def __init__(self, name, path, size = 10, res = 10, evaporation = 0.0, diffusion = 0.0):
+        self.resolution = res # grid cell size = 1 m / resolution
+        self.size = size # m
         self.num_cell = self.resolution * self.size + 1
         if self.num_cell % 2 == 0:
             raise Exception("Number of cell is even. It needs to be an odd number")
@@ -251,6 +283,10 @@ class Pheromone():
         self.update_timer = time.clock()
         self.step_timer = time.clock()
         self.injection_timer = time.clock()
+        self.save_timer = time.clock()
+        self.reset_timer = time.clock()
+
+        self.path = path
 
     def getPhero(self, x, y):
         return self.grid[x, y]
@@ -317,6 +353,10 @@ class Pheromone():
     
 if __name__ == "__main__":
     rospy.init_node('pheromone')
-    Phero1 = Pheromone(180,0)
-    node1 = Node(Phero1)
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    path = os.path.join(parent_dir, time_str)
+    os.mkdir(path)
+
+    node1 = Node(path)
     rospy.spin()
