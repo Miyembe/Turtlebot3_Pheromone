@@ -247,7 +247,7 @@ class Node():
 
         # Save Pheromone map for every 0.1 s
         save_cur = time.clock()
-        if save_cur - phero[0].save_timer >= 0.1 and self.save_counter < 4:
+        if save_cur - phero[0].save_timer >= 0.1 and self.save_counter == 3:
             elapsed_time = save_cur - phero[0].reset_timer
             for i in range(self.num_robots):
                 phero[i].save("{}_{:0.1f}".format(i, elapsed_time))
@@ -262,7 +262,7 @@ class Node():
             print("Save time elapsed: {}".format(time.clock()-save_cur))
 
         end_time = time.time()
-        print("update time: {}".format(end_time - start_time))
+        #print("update time: {}".format(end_time - start_time))
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
 	    # ========================================================================= #
