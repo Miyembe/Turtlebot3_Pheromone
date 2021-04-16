@@ -412,7 +412,7 @@ def main(args):
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					done = 1
+					done = np.array([True]).reshape(game_state.num_robots, 1)
 				
 				
 				step = step + 1

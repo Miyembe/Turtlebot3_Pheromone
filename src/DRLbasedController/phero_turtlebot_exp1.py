@@ -313,7 +313,7 @@ class Env:
         #phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
     
         ## 5.3. Goal reward
-        if distance_to_goal <= 0.4:
+        if distance_to_goal <= 0.3:
             goal_reward = 100.0
             done = True
             self.reset()
@@ -322,12 +322,12 @@ class Env:
         ## 5.4. Angular speed penalty
         angular_punish_reward = 0.0
         if abs(angular_z) > 1.2:
-            angular_punish_reward = -1.0
+            angular_punish_reward = 0.0
         
         ## 5.5. Linear speed penalty
         linear_punish_reward = 0.0
         if linear_x < 0.2:
-            linear_punish_reward = -1.0
+            linear_punish_reward = 0.0
         ## 5.6. Collision penalty
         #   if it collides to walls, it gets penalty, sets done to true, and reset
         collision_reward = 0.0
@@ -335,7 +335,7 @@ class Env:
         dist_obs = [sqrt((x-obs_pos[i][0])**2+(y-obs_pos[i][1])**2) for i in range(len(obs_pos))]
         for i in range(len(obs_pos)):
             if dist_obs[i] < 0.3:
-                collision_reward = -150.0
+                collision_reward = -100.0
                 self.reset()
                 time.sleep(0.5)
 
@@ -355,6 +355,8 @@ class Env:
             time.sleep(0.5)
         end_time = time.time()
         step_time = end_time - start_time
+
+        done = np.array(done).reshape(self.num_robots)
 
         # 7. Other Debugging 
         info = [{"episode": {"l": self.ep_len_counter, "r": reward}}]

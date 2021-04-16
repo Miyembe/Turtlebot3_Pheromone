@@ -24,6 +24,8 @@ class ReplayBuffer(object):
         # 20210325 np array case added
         if obs_t.shape[0] >= 1:
             for i in range(obs_t.shape[0]):
+                print("done: {}".format(done))
+                print("reward: {}".format(reward))
                 data = (obs_t[i], action[i], reward[i], obs_tp1[i], done[i])
                 if self._next_idx >= len(self._storage):
                     self._storage.append(data)

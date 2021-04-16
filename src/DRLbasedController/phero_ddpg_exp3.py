@@ -86,6 +86,13 @@ class ExperienceReplayBuffer:
 			self.replay_buffer = ReplayBuffer(buffer_size)
 			self.beta_schedule = None
 	def add(self, obs_t, action, reward, obs_tp1, done):
+		print("################################")
+		print("obs_t: {}".format(obs_t))
+		print("action: {}".format(action))
+		print("reward: {}".format(reward))
+		print("obs_tp1: {}".format(obs_tp1))
+		print("done: {}".format(done))
+		print("################################")
 		self.replay_buffer.add(obs_t, action, reward, obs_tp1, done)
 		
 		
@@ -442,7 +449,7 @@ def main(args):
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					done = 1
+					dones = np.array([True, True, True, True]).reshape(game_state.num_robots, 1)
 					#print("this is reward:", total_reward)
 					#print('eps is', eps)
 				
