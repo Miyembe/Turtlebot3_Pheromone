@@ -60,7 +60,7 @@ class Node():
 
         # Logging
         self.file_name = "pose_{}".format(self.num_robots)
-        with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
+        with open(self.pheromone.path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
 

@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp3_eval
+import phero_turtlebot_exp3_eval2
 import numpy as np
 import os
 import sys
@@ -344,7 +344,7 @@ def main(args):
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp3_eval.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp3_eval2.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################
@@ -518,8 +518,8 @@ def main(args):
 			print("trial:" + str(i))
 			_, current_states = game_state.reset()
 			
-			actor_critic.actor_model.load_weights(os.path.join(actor_critic.parent_dir, "20210411-232435actormodel-690-256.h5"))
-			actor_critic.critic_model.load_weights(os.path.join(actor_critic.parent_dir, "20210411-232435criticmodel-690-256.h5"))
+			actor_critic.actor_model.load_weights(os.path.join(actor_critic.parent_dir, "20210415-112948actormodel-690-256.h5"))
+			actor_critic.critic_model.load_weights(os.path.join(actor_critic.parent_dir, "20210415-112948criticmodel-690-256.h5"))
 			##############################################################################################
 			total_reward = 0
 			

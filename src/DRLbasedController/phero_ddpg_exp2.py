@@ -436,7 +436,7 @@ def main(args):
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					done = 1
+					dones = np.array([True, True, True, True]).reshape(game_state.num_robots, 1)
 					#print("this is reward:", total_reward)
 					#print('eps is', eps)
 				

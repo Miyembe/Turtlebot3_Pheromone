@@ -324,19 +324,19 @@ class Node():
 
         # Save Pheromone map for every 0.1 s
         save_cur = time.clock()
-        #print("Save_counter:{}".format(self.save_counter))
-        # if save_cur - phero[0].save_timer >= 0.1 and self.save_counter == 3:
-        #     elapsed_time = save_cur - phero[0].reset_timer
-        #     for i in range(self.num_robots):
-        #         self.pheromone[i].save("{}_{:0.1f}".format(i, elapsed_time))
-        #         with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
-        #             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        #             csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
-        #                                  '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])    
-        #         print("x_{}, y_{}: ({}, {})".format(i,i,x_idx[i],y_idx[i]))
-        #     for i in range(self.num_obs):
-        #         static_phero[i].save(("st_{}_{:0.1f}".format(i, elapsed_time)))
-        #     phero[0].save_timer = save_cur
+        print("Save_counter:{}".format(self.save_counter))
+        if save_cur - phero[0].save_timer >= 0.1 and self.save_counter == 3:
+            elapsed_time = save_cur - phero[0].reset_timer
+            for i in range(self.num_robots):
+                self.pheromone[i].save("{}_{:0.1f}".format(i, elapsed_time))
+                with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
+                    csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
+                                         '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])    
+                print("x_{}, y_{}: ({}, {})".format(i,i,x_idx[i],y_idx[i]))
+            for i in range(self.num_obs):
+                static_phero[i].save(("st_{}_{:0.1f}".format(i, elapsed_time)))
+            phero[0].save_timer = save_cur
             
             #print("Save time elapsed: {}".format(time.clock()-save_cur))
 

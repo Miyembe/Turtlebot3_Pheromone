@@ -86,6 +86,13 @@ class ExperienceReplayBuffer:
 			self.replay_buffer = ReplayBuffer(buffer_size)
 			self.beta_schedule = None
 	def add(self, obs_t, action, reward, obs_tp1, done):
+		print("################################")
+		print("obs_t: {}".format(obs_t))
+		print("action: {}".format(action))
+		print("reward: {}".format(reward))
+		print("obs_tp1: {}".format(obs_tp1))
+		print("done: {}".format(done))
+		print("################################")
 		self.replay_buffer.add(obs_t, action, reward, obs_tp1, done)
 		
 		
@@ -215,7 +222,6 @@ class ActorCritic:
 		# cur_states, actions, rewards, new_states, done = stack_samples(samples)
 		#print("samples: {}, shape: {}".format(samples, np.asarray(samples).shape))
 		cur_states, actions, rewards, new_states, dones, weights, batch_idxes = stack_samples(samples) # PER version also checks if I need to use stack_samples
-		print("new_states: {}, shape: {}, type: {}".format(new_states, new_states.shape, type(new_states)))
 		target_actions = self.target_actor_model.predict(new_states)
 		future_rewards = self.target_critic_model.predict([new_states, target_actions])
 		rewards = rewards + self.gamma*future_rewards.reshape(future_rewards.shape[0]) * (1 - dones)
@@ -443,7 +449,7 @@ def main(args):
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					done = 1
+					dones = np.array([True, True, True, True]).reshape(game_state.num_robots, 1)
 					#print("this is reward:", total_reward)
 					#print('eps is', eps)
 				
@@ -486,15 +492,14 @@ def main(args):
 				reward_sample = []
 				new_state_sample = []
 				done_sample = []
-				non_stop_counter = 0
-				for i in range(num_robots):
-					if is_stops[i] == False:
+				for k in range(num_robots):
+					if is_stops[k] == False:
 						#print("current_states[i]: {}, shape: {}".format(current_states[i], current_states[i].shape))
-						state_sample.append(current_states[i])
-						action_sample.append(actions[i])
-						reward_sample.append(rewards[i])
-						new_state_sample.append(new_states[i])
-						done_sample.append(dones[i])
+						state_sample.append(current_states[k])
+						action_sample.append(actions[k])
+						reward_sample.append(rewards[k])
+						new_state_sample.append(new_states[k])
+						done_sample.append(dones[k])
 						#non_stop_counter += 1
 				#print("state_sample: {}".format(state_sample))
 				#print("array_state_sample: {}, shape: {}".format(np.array(state_sample), np.array(state_sample).shape))
@@ -513,7 +518,7 @@ def main(args):
 				#actor_critic.replay_buffer.add(current_states, actions, rewards, new_states, dones)
 				current_states = new_states
 
-				reward_infos.append(reward_sample)
+				reward_infos.append(safemean(reward_sample))
 				
 				##########################################################################################
 			if (i % 10==0):
