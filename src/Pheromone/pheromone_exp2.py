@@ -92,7 +92,7 @@ class Node():
         self.file_name = "pose_{}".format(self.num_robots)
         with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
+            csv_writer.writerow(['time', 'ID', 'x', 'x_idx', 'y', 'y_idx', 'yaw'])
 
 
     def posToIndex(self, x, y):
@@ -254,8 +254,9 @@ class Node():
                 if self.save_counter == 3:
                     with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                        csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
-                                             '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])
+                        csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i), '{}'.format(x[i]),
+                                             '{}'.format(x_idx[i]), '{}'.format(y[i]), '{}'.format(y_idx[i]), 
+                                             '{}'.format(theta[i])])  
 
 
             phero[0].save_timer = save_cur
