@@ -298,7 +298,7 @@ class Env:
         if (self.counter_step % 1 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 1 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
@@ -422,7 +422,7 @@ class Env:
         #print("------------------------")
         #print("State: {}".format(phero_vals))
         ## 6.3. Goal reward
-        if distance_to_goal <= 0.3:
+        if distance_to_goal <= 0.45:
             self.is_goal = True
             self.done = True
             #self.reset()

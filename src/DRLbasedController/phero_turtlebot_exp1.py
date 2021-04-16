@@ -313,7 +313,7 @@ class Env:
         #phero_reward = 0.0 #(-phero_sum) # max phero_r: 0, min phero_r: -9
     
         ## 5.3. Goal reward
-        if distance_to_goal <= 0.4:
+        if distance_to_goal <= 0.3:
             goal_reward = 100.0
             done = True
             self.reset()
