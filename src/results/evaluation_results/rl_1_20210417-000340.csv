@@ -1,0 +1,5 @@
+Episode,Success Rate,Average Arrival time,Standard Deviation,Collision Rate,Timeout Rate
+100,99.00,8.05,0.28,1.00,0.00
+100,0.00,nan,nan,0.00,0.00
+200,98.00,8.09,0.37,2.00,0.00
+200,0.00,nan,nan,0.00,0.00

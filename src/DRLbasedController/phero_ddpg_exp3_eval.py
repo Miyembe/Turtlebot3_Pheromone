@@ -112,6 +112,7 @@ class ActorCritic:
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
 		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp3/" 
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		#os.mkdir(self.path)
 		
@@ -518,8 +519,8 @@ def main(args):
 			print("trial:" + str(i))
 			_, current_states = game_state.reset()
 			
-			actor_critic.actor_model.load_weights(os.path.join(actor_critic.parent_dir, "20210415-112948actormodel-690-256.h5"))
-			actor_critic.critic_model.load_weights(os.path.join(actor_critic.parent_dir, "20210415-112948criticmodel-690-256.h5"))
+			actor_critic.actor_model.load_weights(os.path.join(actor_critic.save_dir, "20210415-112948actormodel-690-256.h5"))
+			actor_critic.critic_model.load_weights(os.path.join(actor_critic.save_dir, "20210415-112948criticmodel-690-256.h5"))
 			##############################################################################################
 			total_reward = 0
 			

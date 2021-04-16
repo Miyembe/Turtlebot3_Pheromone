@@ -199,6 +199,10 @@ class Node():
         phero = self.pheromone
 
         x_idx, y_idx = self.posToIndex(x, y)
+        
+        for i in range(self.num_robots):
+            x[i] = pose[i].position.x
+            y[i] = pose[i].position.y
 
         # ========================================================================= #
 	    #                           Pheromone Reading                               #

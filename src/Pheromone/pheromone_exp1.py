@@ -207,7 +207,8 @@ class Node():
                                          '{}'.format(x_idx), '{}'.format(y),'{}'.format(y_idx), '{}'.format(theta)])    
                 print("x_{}, y_{}: ({}, {})".format(i,i,x_idx,y_idx))
             phero.save_timer = save_cur
-            
+        print("save_counter: {}".format(self.save_counter))
+        
 
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
@@ -229,6 +230,8 @@ class Node():
             try:
                 self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
+                self.save_counter += 1
+                self.pheromone.reset_timer = time.clock()
             except IOError as io:
                 print("No pheromone to load: %s"%io)
                 
