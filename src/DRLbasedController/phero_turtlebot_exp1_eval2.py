@@ -276,16 +276,16 @@ class Env:
 	    # ========================================================================= #
 
         if self.counter_step == 0:
-            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
             if self.is_traj == True:
-                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
                     csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                     csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
         if self.counter_step != 0:
-            if (self.counter_collision != 0 and self.counter_success != 0):
+            if (self.counter_collision != 0 or self.counter_success != 0):
                 succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
                 col_percentage = 100*self.counter_collision/(self.counter_success+self.counter_collision+self.counter_timeout)
                 tout_percentage = 100*self.counter_timeout/(self.counter_success+self.counter_collision+self.counter_timeout)
@@ -294,15 +294,18 @@ class Env:
                 col_percentage = 0
                 tout_percentage = 0
             print("Counter: {}".format(self.counter_step))
+            print("Success Counter: {}".format(self.counter_success))
+            print("Collision Counter: {}".format(self.counter_collision))
+            print("Timeout Counter: {}".format(self.counter_timeout))
 
         if (self.counter_step % 1 == 0 and self.counter_step != 0):
             print("Success Rate: {}%".format(succ_percentage))
 
-        if (self.counter_step % 1 == 0 and self.counter_step != 0):
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
-            with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
                 print("Successfully Logged.")
@@ -369,7 +372,7 @@ class Env:
         # Log Positions
         if time.time() - self.log_timer > 0.5 and self.is_traj == True:
             for i in range(self.num_robots):
-                with open('/home/swn/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x, '%0.2f'%y])
             self.log_timer = time.time()
@@ -393,7 +396,7 @@ class Env:
         phero_now = self.phero_ig.get_msg().data
         phero_grad = self.grad_sensitivity*(np.array(phero_now) - np.array(phero_prev))
         
-        print("phero_grad: {}".format(phero_grad))
+        #print("phero_grad: {}".format(phero_grad))
         state_arr = phero_grad
         state_arr = np.append(state_arr, np.asarray(phero_now))
         state_arr = np.append(state_arr, distance_to_goal)
@@ -422,7 +425,7 @@ class Env:
         #print("------------------------")
         #print("State: {}".format(phero_vals))
         ## 6.3. Goal reward
-        if distance_to_goal <= 0.3:
+        if distance_to_goal <= 0.45:
             self.is_goal = True
             self.done = True
             #self.reset()

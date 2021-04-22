@@ -62,7 +62,7 @@ class Node():
         self.file_name = "pose_{}".format(self.num_robots)
         with open(self.pheromone.path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
+            csv_writer.writerow(['time', 'ID', 'x', 'x_idx', 'y', 'y_idx', 'yaw'])
 
         
 
@@ -203,11 +203,12 @@ class Node():
                 self.pheromone.save("{}_{:0.1f}".format(i, elapsed_time))
                 with open(self.pheromone.path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
                     csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
-                                         '{}'.format(x_idx), '{}'.format(y_idx), '{}'.format(theta)])    
+                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i), '{}'.format(x),
+                                         '{}'.format(x_idx), '{}'.format(y),'{}'.format(y_idx), '{}'.format(theta)])    
                 print("x_{}, y_{}: ({}, {})".format(i,i,x_idx,y_idx))
             phero.save_timer = save_cur
-            
+        print("save_counter: {}".format(self.save_counter))
+        
 
         # ========================================================================= #
 	    #                           Load Pheromone                                  #
@@ -229,6 +230,8 @@ class Node():
             try:
                 self.pheromone.load("simple_collision_diffused3") # you can load any types of pheromone grid
                 self.is_reset = False           # Reset the flag for next use
+                self.save_counter += 1
+                self.pheromone.reset_timer = time.clock()
             except IOError as io:
                 print("No pheromone to load: %s"%io)
                 

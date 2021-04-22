@@ -105,7 +105,7 @@ class Node():
         self.file_name = "pose_{}".format(self.num_robots)
         with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['time', 'ID', 'x', 'y', 'yaw'])
+            csv_writer.writerow(['time', 'ID', 'x', 'x_idx', 'y', 'y_idx', 'yaw'])
 
         print("Initialisation completed")
 
@@ -199,6 +199,10 @@ class Node():
         phero = self.pheromone
 
         x_idx, y_idx = self.posToIndex(x, y)
+        
+        for i in range(self.num_robots):
+            x[i] = pose[i].position.x
+            y[i] = pose[i].position.y
 
         # ========================================================================= #
 	    #                           Pheromone Reading                               #
@@ -331,8 +335,9 @@ class Node():
                 self.pheromone[i].save("{}_{:0.1f}".format(i, elapsed_time))
                 with open(self.pheromone[0].path + '/{}.csv'.format(self.file_name), mode='a') as csv_file:
                     csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i),
-                                         '{}'.format(x_idx[i]), '{}'.format(y_idx[i]), '{}'.format(theta[i])])    
+                    csv_writer.writerow(['{:0.1f}'.format(elapsed_time), '{}'.format(i), '{}'.format(x[i]),
+                                         '{}'.format(x_idx[i]), '{}'.format(y[i]), '{}'.format(y_idx[i]), 
+                                         '{}'.format(theta[i])])    
                 print("x_{}, y_{}: ({}, {})".format(i,i,x_idx[i],y_idx[i]))
             for i in range(self.num_obs):
                 static_phero[i].save(("st_{}_{:0.1f}".format(i, elapsed_time)))
