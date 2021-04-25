@@ -133,7 +133,7 @@ class ActorCritic:
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
-		self.hid_list = [500, 500, 500]
+		self.hid_list = [512, 512, 512]
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -144,7 +144,9 @@ class ActorCritic:
 
 		
 		self.actor_model = Actor(self.env.observation_space.shape, self.env.action_space.shape, self.hid_list)
+		self.actor_model.reset_parameters()
 		self.target_actor_model = Actor(self.env.observation_space.shape, self.env.action_space.shape, self.hid_list)
+		self.target_actor_model.reset_parameters()
 		self.actor_optim = optim.Adam(self.actor_model.parameters(), lr=self.learning_rate)
 
 
@@ -153,7 +155,9 @@ class ActorCritic:
 		# ===================================================================== #
 
 		self.critic_model = Critic(self.env.observation_space.shape, self.env.action_space.shape, 1, self.hid_list)
+		self.critic_model.reset_parameters()
 		self.target_critic_model = Critic(self.env.observation_space.shape, self.env.action_space.shape, 1, self.hid_list)
+		self.target_critic_model.reset_parameters()
 		self.critic_optim = optim.Adam(self.critic_model.parameters(), lr=self.learning_rate)
 		
 
@@ -526,7 +530,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [20, 54, 124]
+	list_var = [210, 54, 133]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)

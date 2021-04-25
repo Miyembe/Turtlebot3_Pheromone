@@ -48,6 +48,11 @@ class Actor(nn.Module):
         for i in range(len(self.layers)):
             if isinstance(self.layers[i], NoisyLinear):
                 self.layers[i].reset_noise()
+    
+    def reset_parameters(self):
+        for i in range(len(self.layers)):
+            if isinstance(self.layers[i], NoisyLinear):
+                self.layers[i].reset_parameters()
 
         
 
@@ -107,3 +112,8 @@ class Critic(nn.Module):
         for i in range(len(self.layers)):
             if isinstance(self.layers[i], NoisyLinear):
                 self.layers[i].reset_noise()
+
+    def reset_parameters(self):
+        for i in range(len(self.layers)):
+            if isinstance(self.layers[i], NoisyLinear):
+                self.layers[i].reset_parameters()
