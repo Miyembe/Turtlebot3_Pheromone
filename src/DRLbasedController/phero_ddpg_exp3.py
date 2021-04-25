@@ -37,7 +37,7 @@ import argparse
 
 import logger
 
-#from numba import jit
+HOME = os.environ('HOME')
 
 def stack_samples(samples):
 	
@@ -121,7 +121,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 		# ===================================================================== #
@@ -349,7 +349,7 @@ def safemean(xs):
 
 def main(args):
 	time_str = time.strftime("%Y%m%d-%H%M%S")
-	logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+	logger_ins = logger.Logger(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
 	board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 	sess = tf.Session()
 	K.set_session(sess)
@@ -365,7 +365,7 @@ def main(args):
 	tfirststart = time.time()
 	
 	# Reward Logging
-	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
+	with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 		csv_writer.writerow(['Episode', 'Average Reward'])
 
@@ -552,11 +552,11 @@ def main(args):
 				board_logger.log_scalar("eprewmean", reward_mean, i)
 				
 				board_logger.flush()
-				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
+				with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
 					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
 				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
-				sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
+				sio.savemat(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
 
 		
 
