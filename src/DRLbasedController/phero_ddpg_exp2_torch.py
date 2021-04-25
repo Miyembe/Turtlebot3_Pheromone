@@ -11,13 +11,11 @@ import os
 import sys
 print(sys.path)
 import multiprocessing
-import keras
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, merge
-from keras.layers.merge import Add, Concatenate
-from keras.optimizers import Adam
-import keras.backend as K
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.autograd as autograd 
+import torch.nn.functional as F
 import random
 from collections import deque
 from utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
@@ -39,6 +37,7 @@ from torch_util import *
 
 import logger
 
+HOME = os.environ['HOME']
 #from numba import jit
 
 def stack_samples(samples):
@@ -91,10 +90,9 @@ class ExperienceReplayBuffer:
 # determines how to assign values to each state, i.e. takes the state
 # and action (two-input model) and determines the corresponding value
 class ActorCritic:
-	def __init__(self, env, sess):
+	def __init__(self, env):
 		self.env  = env
 		self.num_robots = env.num_robots
-		self.sess = sess
 
 		self.learning_rate = 0.0001
 		self.epsilon = .9
@@ -113,7 +111,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 
@@ -124,15 +122,13 @@ class ActorCritic:
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		# Hidden Layer list
-        self.hid_list = [500, 500, 500]
+		self.hid_list = [512, 512, 512]
 		# ===================================================================== #
 		#                               Actor Model                             #
 		# Chain rule: find the gradient of chaging the actor network params in  #
 		# getting closest to the final value network predictions, i.e. de/dA    #
 		# Calculate de/dA as = de/dC * dC/dA, where e is error, C critic, A act #
 		# ===================================================================== #
-
-		
 
 		self.actor_model = Actor(self.env.observation_space.shape, self.env.action_space.shape, self.hid_list)
 		self.target_actor_model = Actor(self.env.observation_space.shape, self.env.action_space.shape, self.hid_list)
@@ -308,13 +304,11 @@ def safemean(xs):
 
 def main(args):
 	time_str = time.strftime("%Y%m%d-%H%M%S")
-	logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+	logger_ins = logger.Logger(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
 	board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
-	sess = tf.Session()
-	K.set_session(sess)
 	########################################################
 	game_state= phero_turtlebot_exp2.Env()   # game_state has frame_step(action) function
-	actor_critic = ActorCritic(game_state, sess)
+	actor_critic = ActorCritic(game_state)
 	random.seed(args.random_seed)
 	########################################################
 	num_trials = 600
@@ -324,7 +318,7 @@ def main(args):
 	tfirststart = time.time()
 	
 	# Reward Logging
-	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
+	with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 		csv_writer.writerow(['Episode', 'Average Reward'])
 
@@ -406,7 +400,7 @@ def main(args):
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					dones = np.array([True, True, True, True]).reshape(game_state.num_robots, 1)
+					dones = np.array([True, True]).reshape(game_state.num_robots, 1)
 					#print("this is reward:", total_reward)
 					#print('eps is', eps)
 				
@@ -474,11 +468,11 @@ def main(args):
 				board_logger.log_scalar("eprewmean", reward_mean, i)
 				
 				board_logger.flush()
-				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
+				with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
 					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
 				step_reward = np.append(step_reward,[[num_trials, reward_mean]], axis=0)
-				sio.savemat('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
+				sio.savemat(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/MATLAB/step_reward_{}.mat'.format(actor_critic.time_str), {'data':step_reward},True,'5',False,False,'row')
 
 		
 
@@ -533,7 +527,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [210, 593, 22]
+	list_var = [210, 213, 424]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)

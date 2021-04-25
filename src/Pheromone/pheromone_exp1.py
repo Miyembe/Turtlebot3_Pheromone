@@ -20,6 +20,9 @@ import csv
 from turtlebot3_pheromone.srv import PheroGoal, PheroGoalResponse
 from turtlebot3_pheromone.srv import PheroInj, PheroInjResponse
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
+
+HOME = os.environ['HOME']
+
 class Node():
 
     def __init__(self, path):
@@ -344,12 +347,12 @@ class Pheromone():
                     self.grid[i, j] = decay * self.grid[i, j]
 
     def save(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
+        with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'wb') as f: # Please change the path to your local machine's path to the catkin workspace
             np.save(f, self.grid)
         print("The pheromone matrix {} is successfully saved".format(file_name))
 
     def load(self, file_name):
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
@@ -357,7 +360,7 @@ class Pheromone():
 if __name__ == "__main__":
     rospy.init_node('pheromone')
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
     path = os.path.join(parent_dir, time_str)
     os.mkdir(path)
 

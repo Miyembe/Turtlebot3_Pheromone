@@ -23,6 +23,8 @@ from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
 
+HOME = os.environ['HOME']
+
 class Antennae():
     '''
     Description:
@@ -521,7 +523,7 @@ class Pheromone():
         '''
         Load the previously saved pheromone matrix 
         '''
-        with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
+        with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/tmp/{}.npy'.format(file_name), 'rb') as f:
             self.grid = np.load(f)
         print("The pheromone matrix {} is successfully loaded".format(file_name))
 
@@ -529,7 +531,7 @@ class Pheromone():
 if __name__ == "__main__":
     rospy.init_node('pheromone')
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
     path = os.path.join(parent_dir, time_str)
     os.mkdir(path)
 

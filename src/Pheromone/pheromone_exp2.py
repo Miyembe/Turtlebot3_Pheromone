@@ -23,6 +23,8 @@ from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from turtlebot3_pheromone.srv import PheroRead, PheroReadResponse
 from turtlebot3_pheromone.msg import fma
 
+HOME = os.environ['HOME']
+
 class Antennae():
     '''
     Description:
@@ -464,7 +466,7 @@ class Pheromone():
 def main():
 
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
+    parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/tmp/"
     path = os.path.join(parent_dir, time_str)
     os.mkdir(path)
     
