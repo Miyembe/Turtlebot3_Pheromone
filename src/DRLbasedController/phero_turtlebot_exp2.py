@@ -433,7 +433,7 @@ class Env:
         ### Reset condition is activated when both two robots have arrived their goals 
         ### Arrived robots stop and waiting
         for i in range(self.num_robots):
-            if distance_to_goals[i] <= 0.3 and dones[i] == False:
+            if distance_to_goals[i] <= 0.45 and dones[i] == False:
                 goal_rewards[i] = 100.0
                 dones[i] = True
                 self.reset(model_state, id_bots=idx[i])
