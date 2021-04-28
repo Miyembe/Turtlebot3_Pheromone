@@ -11,6 +11,12 @@ import os
 import sys
 print(sys.path)
 import multiprocessing
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.autograd as autograd 
+import torch.nn.functional as F
+
 import keras
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Input, merge
@@ -127,14 +133,14 @@ class ActorCritic:
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 
-        # Replay buffer
+		# Replay buffer
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name ="reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		
-        self.hid_list = [500, 500, 500]
+		self.hid_list = [256, 256, 128]
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -177,12 +183,12 @@ class ActorCritic:
 
 	def _train_critic_actor(self, samples):
 
-        Loss = nn.MSELoss()
- 
+		Loss = nn.MSELoss()
 
-   		# 1, sample
+
+ 		# 1, sample
 		cur_states, actions, rewards, new_states, dones, weights, batch_idxes = stack_samples(samples) # PER version also checks if I need to use stack_samples
-		target_actions = self.target_actor_model.predict(new_states)
+		target_actions = to_numpy(self.target_actor_model(to_tensor(new_states)))
         
         # Critic Update
 		self.critic_model.zero_grad()
@@ -211,18 +217,6 @@ class ActorCritic:
 		self.actor_model.reset_noise()
 		self.target_actor_model.reset_noise()
 
-
-		# 5, train actor based on weights
-		predicted_actions = self.actor_model.predict(cur_states)
-		grads = self.sess.run(self.critic_grads, feed_dict={
-			self.critic_state_input:  cur_states,
-			self.critic_action_input: predicted_actions
-		})[0]
-
-		self.sess.run(self.optimize, feed_dict={
-			self.actor_state_input: cur_states,
-			self.actor_critic_grad: grads
-		})
 		return td_errors
 		# print("grads*weights is %s", grads)
 		
@@ -325,7 +319,7 @@ class ActorCritic:
 		self.target_actor_model.cuda()
 		self.critic_model.cuda()
 		self.target_critic_model.cuda()
-		return self.actor_model.predict(cur_state)
+
 
 def safemean(xs):
        return np.nan if len(xs) == 0 else np.mean(xs)
@@ -341,7 +335,7 @@ def main(args):
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################
-	num_trials = 700
+	num_trials = 500
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1
@@ -594,7 +588,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [65, 101, 236]
+	list_var = [664, 710, 8]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)
