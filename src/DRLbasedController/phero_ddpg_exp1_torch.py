@@ -45,6 +45,8 @@ from ActorCritic import Actor, Critic
 from torch_util import *
 
 import logger
+
+HOME = os.environ['HOME']
 #from numba import jit
 
 
@@ -123,7 +125,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 
@@ -133,7 +135,7 @@ class ActorCritic:
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
-		self.hid_list = [512, 512, 512]
+		self.hid_list = [256, 256, 256]
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -272,8 +274,8 @@ class ActorCritic:
 		action = to_numpy(self.actor_model(to_tensor(cur_state))).squeeze(0)
 		action = action.reshape(1,2)
 		if np.random.random() < self.epsilon:
-			action[0][0] = action[0][0] + (np.random.random()-0.5)*0.4
-			action[0][1] = action[0][1] + (np.random.random())*0.4
+			action[0][0] = action[0][0]+ (np.random.random()-0.5)*0.4
+			action[0][1] = action[0][1]+ (np.random.random())*0.4
 			print("action: {}, shape: {}".format(action, action.shape))
 			return action, eps	
 		else:
@@ -324,7 +326,7 @@ def safemean(xs):
 
 def main(args):
 	time_str = time.strftime("%Y%m%d-%H%M%S")
-	logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+	logger_ins = logger.Logger(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
 	board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 	sess = tf.Session()
 	K.set_session(sess)
@@ -333,14 +335,14 @@ def main(args):
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################
-	num_trials = 600
+	num_trials = 400
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1
 	tfirststart = time.time()
 
 	# Reward Logging
-	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
+	with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 		csv_writer.writerow(['Episode', 'Average Reward'])
 
@@ -473,7 +475,7 @@ def main(args):
 				#     board_logger.log_scalar(lossname, lossval, update)
 				board_logger.log_scalar("eprewmean", safemean([epinfo['r'] for epinfo in epinfobuf]), i)
 				board_logger.flush()
-				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
+				with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
 					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
 
