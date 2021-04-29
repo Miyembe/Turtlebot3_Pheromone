@@ -336,7 +336,7 @@ def main(args):
 	actor_critic = ActorCritic(game_state, sess, args)
 	random.seed(args.random_seed)
 	########################################################
-	num_trials = 600
+	num_trials = 500
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1

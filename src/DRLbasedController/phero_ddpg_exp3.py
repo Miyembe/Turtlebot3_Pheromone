@@ -134,7 +134,7 @@ class ActorCritic:
 		# Replay buffer
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
-		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
+		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer=args.replay_buffer)
 		# File name
 		self.file_name ="reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		
@@ -355,10 +355,10 @@ def main(args):
 	K.set_session(sess)
 	########################################################
 	game_state= phero_turtlebot_exp3.Env()   # game_state has frame_step(action) function
-	actor_critic = ActorCritic(game_state, sess)
+	actor_critic = ActorCritic(game_state, sess, args)
 	random.seed(args.random_seed)
 	########################################################
-	num_trials = 700
+	num_trials = 500
 	trial_len  = 256
 	log_interval = 5
 	train_indicator = 1
@@ -610,10 +610,15 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
-	name_var = 'random_seed'
-	list_var = [65, 101, 236]
-	for var in list_var:
-		setattr(args, name_var, var)
-		print(args)
-		main(args)
+	name_var1 = 'random_seed'
+	name_var2 = 'replay_buffer'
+	list_var1 = [233, 444, 651]
+	list_var2 = ["PER", "HER"]
+	for var1 in list_var1:
+		for var2 in list_var2:
+			setattr(args, name_var1, var1)
+			setattr(args, name_var2, var2)
+			print(args)
+			main(args)
+
 
