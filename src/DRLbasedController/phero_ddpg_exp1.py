@@ -262,8 +262,9 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		if self.replay_buffer.type_buffer == "PER":
+			new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+			self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 	# ========================================================================= #

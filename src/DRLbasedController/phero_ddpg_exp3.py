@@ -37,7 +37,7 @@ import argparse
 
 import logger
 
-HOME = os.environ('HOME')
+HOME = os.environ['HOME']
 
 def stack_samples(samples):
 	
@@ -99,7 +99,7 @@ class ExperienceReplayBuffer:
 # determines how to assign values to each state, i.e. takes the state
 # and action (two-input model) and determines the corresponding value
 class ActorCritic:
-	def __init__(self, env, sess):
+	def __init__(self, env, sess, args):
 		self.env  = env
 		self.num_robots = env.num_robots
 		self.sess = sess
