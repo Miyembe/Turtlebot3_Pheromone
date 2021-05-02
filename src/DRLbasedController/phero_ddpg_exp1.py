@@ -37,7 +37,7 @@ import argparse
 
 import logger
 #from numba import jit
-
+HOME = os.environ["HOME"]
 def stack_samples(samples):
 	
 	current_states = np.squeeze(np.asarray(samples[0]))
@@ -89,7 +89,7 @@ class ExperienceReplayBuffer:
 		self.replay_buffer.add(obs_t, action, reward, obs_tp1, done)
 
 class ActorCritic:
-	def __init__(self, env, sess):
+	def __init__(self, env, sess, args):
 		self.env  = env
 		self.num_robots = env.num_robots
 		self.sess = sess
@@ -112,7 +112,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.parent_dir = HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights'
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 
@@ -126,7 +126,7 @@ class ActorCritic:
 		# Replay buffer
 		self.memory = deque(maxlen=1000000)
 		# Replay Buffer
-		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
+		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer=args.replay_buffer)
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 
@@ -262,8 +262,8 @@ class ActorCritic:
 		td_errors = self._train_critic_actor(samples)
 
 		# priority updates
-		#new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
-		#self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
+		new_priorities = np.abs(td_errors) + self.replay_buffer.prioritized_replay_eps
+		self.replay_buffer.replay_buffer.update_priorities(batch_idxes, new_priorities)
 
 
 	# ========================================================================= #
@@ -327,13 +327,13 @@ def safemean(xs):
 
 def main(args):
 	time_str = time.strftime("%Y%m%d-%H%M%S")
-	logger_ins = logger.Logger('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
+	logger_ins = logger.Logger(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log', output_formats=[logger.HumanOutputFormat(sys.stdout)])
 	board_logger = tensorboard_logging.Logger(os.path.join(logger_ins.get_dir(), "tf_board", time_str))
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
 	game_state= phero_turtlebot_exp1.Env()   # game_state has frame_step(action) function
-	actor_critic = ActorCritic(game_state, sess)
+	actor_critic = ActorCritic(game_state, sess, args)
 	random.seed(args.random_seed)
 	########################################################
 	num_trials = 600
@@ -343,7 +343,7 @@ def main(args):
 	tfirststart = time.time()
 
 	# Reward Logging
-	with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
+	with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 		csv_writer.writerow(['Episode', 'Average Reward'])
 
@@ -476,7 +476,7 @@ def main(args):
 				#     board_logger.log_scalar(lossname, lossval, update)
 				board_logger.log_scalar("eprewmean", safemean([epinfo['r'] for epinfo in epinfobuf]), i)
 				board_logger.flush()
-				with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
+				with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='a') as csv_file:
 					csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 					csv_writer.writerow(['%i'%i, '%0.2f'%reward_mean])
 
@@ -532,10 +532,14 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
-	name_var = 'random_seed'
-	list_var = [1, 20, 65]
-	for var in list_var:
-		setattr(args, name_var, var)
-		print(args)
-		main(args)
+	name_var1 = 'random_seed'
+	name_var2 = 'replay_buffer'
+	list_var1 = [1, 20, 65]
+	list_var2 = ["PER", "HER"]
+	for var1 in list_var1:
+		for var2 in list_var2:
+			setattr(args, name_var1, var1)
+			setattr(args, name_var2, var2)
+			print(args)
+			main(args)
 
