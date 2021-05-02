@@ -112,7 +112,7 @@ class ActorCritic:
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
 		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp3/" 
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp3/HLER/" 
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		#os.mkdir(self.path)
 		
@@ -542,8 +542,8 @@ def main(args):
 				#print(1/(end_time - start_time), "fps for calculating next step")
 
 				_, new_states, rewards, dones, infos, _= game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
-				print("states: {}".format(current_states[0]))
-				print("actions: {}".format(actions[0]))
+				#print("states: {}".format(current_states[0]))
+				#print("actions: {}".format(actions[0]))
 				###########################################################################################
 
 				if j == (trial_len - 1):

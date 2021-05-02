@@ -166,6 +166,8 @@ class Env:
 
         # Log related
         self.log_timer = time.time()
+        self.positions = [None]*self.num_robots
+
 
     def reset(self, model_state = None, id_bots = 999):
 
@@ -362,7 +364,7 @@ class Env:
         if self.counter_step == 0:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'std_at', 'Collision Rate', 'Timeout Rate', 'Trajectory Efficiency', 'std_te'])
             if self.is_traj == True:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
                     csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -529,11 +531,12 @@ class Env:
         reset_time = step_timer - self.reset_timer
         
         # Log Positions
-        if time.time() - self.log_timer > 0.5 and self.is_traj == True:
+        if time.time() - self.log_timer > 0.1 and self.is_traj == True:
             for i in range(self.num_robots):
-                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
-                        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.4f'%x[i], '%0.4f'%y[i]])
+                #with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                #        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                #        csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.4f'%x[i], '%0.4f'%y[i]])
+                self.positions[i].append([x[i],y[i]])
             self.log_timer = time.time()
 
         theta = self.angle0To360(theta)
