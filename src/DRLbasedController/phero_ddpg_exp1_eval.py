@@ -113,7 +113,7 @@ class ActorCritic:
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
 		self.parent_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp1/" 
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp1/HLER/" 
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 

@@ -156,8 +156,12 @@ class Env:
         # Log related
 
         self.log_timer = time.time()
-
         self.reset_timer = time.time()
+        self.positions = []
+        for i in range(self.num_robots):
+            self.positions.append([])
+        print("positions: {}".format(self.positions))
+        self.traj_eff = list()
 
     def reset(self):
         '''
@@ -186,6 +190,27 @@ class Env:
             art = arrived_timer-self.reset_timer
             self.arrival_time.append(art)
             print("Episode time: %0.2f"%art)
+
+            # Compute trajectory efficiency (how can I add outlier removal?)
+            total_distance = [0.0]*self.num_robots
+            pure_distance = [0.0]*self.num_robots
+            for i in range(self.num_robots):
+                for j in range(len(self.positions[i])-1):
+                    distance_t = sqrt((self.positions[i][j+1][0] - self.positions[i][j][0])**2 + (self.positions[i][j+1][1] - self.positions[i][j][1])**2)
+                    if distance_t <= 0.5:
+                        total_distance[i] += distance_t
+                pure_distance[i] = sqrt((self.positions[i][0][0] - self.positions[i][-1][0])**2 + (self.positions[i][0][1] - self.positions[i][-1][1])**2)
+
+            avg_distance_traj = np.average(total_distance)
+            avg_distance_pure = np.average(pure_distance)
+            traj_efficiency = avg_distance_pure/avg_distance_traj
+            print("Step: {}, avg_distance_traj: {}".format(self.counter_step, avg_distance_traj))
+            #print("self.positions: {}".format(self.positions))
+            #print("Total Distance: {}".format(total_distance))
+            print("avg_distance_pure: {}, traj_efficiency: {}".format(avg_distance_pure, traj_efficiency))
+            #print("distance_t: {}".format(distance_t))
+
+            self.traj_eff.append(traj_efficiency)
 
         if self.is_timeout == True:
             self.counter_timeout += 1
@@ -278,7 +303,7 @@ class Env:
         if self.counter_step == 0:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'Standard Deviation', 'Collision Rate', 'Timeout Rate'])
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'std_at', 'Collision Rate', 'Timeout Rate', 'Trajectory Efficiency', 'std_te'])
             if self.is_traj == True:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
                     csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -304,16 +329,23 @@ class Env:
         if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
+            avg_traj = np.average(np.asarray(self.traj_eff))
+            std_traj = np.std(np.asarray(self.traj_eff))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}, Collision rate: {}, Timeout Rate: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp, col_percentage, tout_percentage))
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage, '%0.4f'%avg_traj, '%0.4f'%std_traj])
                 print("Successfully Logged.")
-            self.arrival_time = []
+            self.arrival_time = list()
+            self.traj_eff = list()
             self.counter_collision = 0
             self.counter_success = 0
             self.counter_timeout = 0
             self.target_index = 0
+
+        self.positions = []
+        for i in range(self.num_robots):
+            self.positions.append([])
         self.reset_timer = time.time()
         
 
@@ -375,6 +407,8 @@ class Env:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x, '%0.2f'%y])
+                print("positions[i]: {}".format(self.positions[i]))
+                self.positions[i].append([x,y])
             self.log_timer = time.time()
 
         # 3. Calculate the distance & angle difference to goal 
