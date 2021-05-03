@@ -109,7 +109,7 @@ class ActorCritic:
 
 		self.demo_size = 1000
 		time_str = time.strftime("%Y%m%d-%H%M%S")
-		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp2/" 
+		self.save_dir = "/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp2/PER/" 
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -506,8 +506,8 @@ def main():
 			print("trial:" + str(i))
 			_, current_states = game_state.reset() 
 			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210415-050222actormodel-590-256.h5")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210415-050222criticmodel-590-256.h5")
+			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210407-062113actormodel-1200-256.h5")
+			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210407-062113criticmodel-1200-256.h5")
 			##############################################################################################
 			total_reward = 0
 			
@@ -529,8 +529,7 @@ def main():
 				#print(1/(end_time - start_time), "fps for calculating next step")
 
 				_, new_states, rewards, dones, infos, _= game_state.step(actions, 0.1) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
-				print("states: {}".format(current_states[0]))
-				print("actions: {}".format(actions[0]))
+
 
                 #total_reward = total_reward + reward
 				###########################################################################################

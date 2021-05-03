@@ -226,20 +226,22 @@ class Env:
             # Compute trajectory efficiency (how can I add outlier removal?)
             total_distance = [0.0]*self.num_robots
             pure_distance = [0.0]*self.num_robots
+            print("self.positions: {}".format(self.positions))
             for i in range(self.num_robots):
                 for j in range(len(self.positions[i])-1):
                     distance_t = sqrt((self.positions[i][j+1][0] - self.positions[i][j][0])**2 + (self.positions[i][j+1][1] - self.positions[i][j][1])**2)
                     if distance_t <= 0.5:
                         total_distance[i] += distance_t
+                    
                 pure_distance[i] = sqrt((self.positions[i][0][0] - self.positions[i][-1][0])**2 + (self.positions[i][0][1] - self.positions[i][-1][1])**2)
 
             avg_distance_traj = np.average(total_distance)
             avg_distance_pure = np.average(pure_distance)
             traj_efficiency = avg_distance_pure/avg_distance_traj
-            print("Step: {}, avg_distance_traj: {}".format(self.counter_step, avg_distance_traj))
-            #print("self.positions: {}".format(self.positions))
+            #print("Step: {}, avg_distance_traj: {}".format(self.counter_step, avg_distance_traj))
+            
             #print("Total Distance: {}".format(total_distance))
-            print("avg_distance_pure: {}, traj_efficiency: {}".format(avg_distance_pure, traj_efficiency))
+            #print("avg_distance_pure: {}, traj_efficiency: {}".format(avg_distance_pure, traj_efficiency))
             #print("distance_t: {}".format(distance_t))
 
             self.traj_eff.append(traj_efficiency)
@@ -530,6 +532,7 @@ class Env:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%x[i], '%0.2f'%y[i]])
+                self.positions[i].append([x[i],y[i]])
             self.log_timer = time.time()
 
         # 3. Calculate the distance & angle difference to goal 

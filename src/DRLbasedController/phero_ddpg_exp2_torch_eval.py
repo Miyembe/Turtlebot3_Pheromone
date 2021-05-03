@@ -112,6 +112,7 @@ class ActorCritic:
 		self.demo_size = 1000
 		self.time_str = time.strftime("%Y%m%d-%H%M%S")
 		self.parent_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/src/DRLbasedController/weights"
+		self.save_dir = HOME + "/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp2/HLERnoisy/" 
 		self.path = os.path.join(self.parent_dir, self.time_str)
 		os.mkdir(self.path)
 
@@ -483,8 +484,8 @@ def main(args):
 			print("trial:" + str(i))
 			current_state = game_state.reset()
 			
-			actor_critic.actor_model.load_weights(path + "actormodel-2950-256.h5")
-			actor_critic.critic_model.load_weights(path + "criticrmodel-2950-256.h5")
+			actor_critic.actor_model.load_weights(actor_critic.save_dir + "actormodel-590-256")
+			actor_critic.critic_model.load_weights(actor_critic.save_dir + "criticmodel-590-256")
 			##############################################################################################
 			total_reward = 0
 			
