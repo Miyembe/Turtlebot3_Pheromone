@@ -1,0 +1,6 @@
+Episode,Success Rate,Average Arrival time,std_at,Collision Rate,Timeout Rate,Trajectory Efficiency,std_te
+100,99.00,7.63,0.06,1.00,0.00,0.9857,0.0031
+100,0.00,nan,nan,0.00,0.00,nan,nan
+200,100.00,7.71,0.06,0.00,0.00,0.9850,0.0032
+300,100.00,7.74,0.06,0.00,0.00,0.9855,0.0029
+400,99.00,7.76,0.06,1.00,0.00,0.9858,0.0029

@@ -520,7 +520,7 @@ class Env:
         twists = [self.action_to_twist(action) for action in np.asarray(actions)]
         # rescaling the action
         for i in range(len(twists)):
-            twists[i].linear.x = (twists[i].linear.x+0.5) * 2/3 # only forward motion
+            twists[i].linear.x = (twists[i].linear.x+1) * 1/2 # only forward motion
             twists[i].angular.z = twists[i].angular.z
         linear_x = [i.linear.x for i in twists]
         angular_z = [i.angular.z for i in twists]
@@ -663,13 +663,13 @@ class Env:
 
         collision_rewards = [0.0]*self.num_robots
         for i in range(self.num_robots):
-            if any([dis <= 0.32 for dis in distance_btw_robots[i]]) == True:
+            if any([dis <= 0.30 for dis in distance_btw_robots[i]]) == True:
                 print("Collision! Robot: {}".format(i))
                 collision_rewards[i] = -100.0
                 dones[i] = True
                 self.is_collided = True
                 self.reset(model_state, id_bots=999)
-            elif distance_to_obstacle[i] < 0.3:
+            elif distance_to_obstacle[i] < 0.26:
                 collision_rewards[i] = -100.0
                 dones[i] = True
                 self.is_collided = True

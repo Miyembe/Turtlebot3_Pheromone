@@ -135,7 +135,7 @@ class ActorCritic:
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
-		self.hid_list = [1024, 512, 512]
+		self.hid_list = [512, 512, 512]
 
 		# ===================================================================== #
 		#                               Actor Model                             #

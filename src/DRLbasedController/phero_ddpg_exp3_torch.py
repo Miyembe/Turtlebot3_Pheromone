@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp3
+import phero_turtlebot_exp3_eval2
 import numpy as np
 import os
 import sys
@@ -331,7 +331,7 @@ def main(args):
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp3.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp3_eval2.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################

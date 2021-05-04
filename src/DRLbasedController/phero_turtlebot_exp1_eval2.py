@@ -363,7 +363,7 @@ class Env:
         linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
         linear_x = (linear_x+1)*1/2
-        angular_z = min(pi/2, max(-pi/2, angular_z*0.6))
+        angular_z = min(1, max(-1, angular_z*0.6))
         
 
         self.move_cmd.linear.x = linear_x

@@ -122,7 +122,7 @@ class ActorCritic:
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
 		# Hidden Layer list
-		self.hid_list = [512, 512, 512]
+		self.hid_list = [1024, 512, 512]
 		# ===================================================================== #
 		#                               Actor Model                             #
 		# Chain rule: find the gradient of chaging the actor network params in  #

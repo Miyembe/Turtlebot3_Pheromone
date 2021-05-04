@@ -5,7 +5,7 @@
 # The expected result is following the pheromone in the most smooth way! even more than ants
 
 #import phero_turtlebot_turtlebot3_ppo
-import phero_turtlebot_exp1
+import phero_turtlebot_exp1_eval2
 import numpy as np
 import os
 import sys
@@ -136,7 +136,7 @@ class ActorCritic:
 		self.replay_buffer = ExperienceReplayBuffer(total_timesteps=5000*256, type_buffer="HER")
 		# File name
 		self.file_name = "reward_{}_{}_{}".format(self.time_str, self.num_robots, self.replay_buffer.type_buffer)
-		self.hid_list = [1024, 512, 512]
+		self.hid_list = [512, 512, 512]
 
 		# ===================================================================== #
 		#                               Actor Model                             #
@@ -303,14 +303,14 @@ class ActorCritic:
 		#self.actor_model.save_weights(self.path + 'actormodel' + '-' +  str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)
 		#self.critic_model.save_weights(self.path + 'criticmodel' + '-' + str(num_trials) + '-' + str(trial_len) + '.h5', overwrite=True)#("criticmodel.h5", overwrite=True)
 
-	def load_weights(self, output):
+	def load_weights(self, path, epoch, network):
 
 		self.actor_model.load_state_dict(
-			torch.load('{}.pkl'.format(output))
+			torch.load('{}'.format(path)+'actormodel'+'-{}-{}.pkl'.format(epoch, network))
 		)
 
 		self.critic_model.load_state_dict(
-			torch.load('{}.pkl'.format(output))
+			torch.load('{}'.format(path)+'criticmodel'+'-{}-{}.pkl'.format(epoch, network))
 		)
 
 	def play(self, cur_state):
@@ -332,17 +332,17 @@ def main(args):
 	sess = tf.Session()
 	K.set_session(sess)
 	########################################################
-	game_state= phero_turtlebot_exp1.Env()   # game_state has frame_step(action) function
+	game_state= phero_turtlebot_exp1_eval2.Env()   # game_state has frame_step(action) function
 	actor_critic = ActorCritic(game_state, sess)
 	random.seed(args.random_seed)
 	########################################################
 	num_trials = 400
 	trial_len  = 256
 	log_interval = 5
-	train_indicator = 1
+	train_indicator = 0
 	tfirststart = time.time()
 
-    path = HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp1/HLERnoisy/'
+	path = HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/results/trained_weights/exp1/HLERnoisy/'
 
 	# Reward Logging
 	with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(actor_critic.file_name), mode='w') as csv_file:
@@ -487,10 +487,9 @@ def main(args):
 	if train_indicator==0:
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			current_state = game_state.reset()
+			_, current_state = game_state.reset()
 			
-			actor_critic.actor_model.load_weights(actor_critic.save_dir + "20210424-205320actormodel-590-256")
-			actor_critic.critic_model.load_weights(actor_critic.save_dir + "20210424-205320criticmodel-590-256")
+			actor_critic.load_weights(actor_critic.save_dir, '590', '256')
 			##############################################################################################
 			total_reward = 0
 			
@@ -498,27 +497,20 @@ def main(args):
 
 				###########################################################################################
 				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
-
-				start_time = time.time()
-				action = actor_critic.play(current_state)  # need to change the network input output, do I need to change the output to be [0, 2*pi]
-				action = action.reshape((1, game_state.action_space.shape[0]))
-				end_time = time.time()
-				print(1/(end_time - start_time), "fps for calculating next step")
-
-				_, new_state, reward, done = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				action, eps = actor_critic.act(current_state)
+				_, new_state, reward, done, info = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				total_reward = total_reward + reward
 				###########################################################################################
 
 				if j == (trial_len - 1):
-					done = 1
-					#print("this is reward:", total_reward)
+					done = np.array([True]).reshape(game_state.num_robots, 1)
 					
 
 				# if (j % 5 == 0):
 				# 	actor_critic.train()
 				# 	actor_critic.update_target()   
 				
-				new_state = new_state.reshape((1, game_state.observation_space.shape[0]))
+				new_state = new_state.reshape((num_robots, game_state.observation_space.shape[0]))
 				# actor_critic.remember(cur_state, action, reward, new_state, done)   # remember all the data using memory, memory data will be samples to samples automatically.
 				# cur_state = new_state
 
