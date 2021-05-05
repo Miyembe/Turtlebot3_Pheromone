@@ -363,14 +363,14 @@ class Env:
         linear_x = linear_x*0.3
         linear_x = min(1, max(-1, linear_x))
         linear_x = (linear_x+1)*1/2
-        angular_z = min(1, max(-1, angular_z*0.6))
+        angular_z = min(pi/2, max(-pi/2, angular_z*0.9))
         
 
         self.move_cmd.linear.x = linear_x
         self.move_cmd.angular.z = angular_z
         action = np.array([linear_x, angular_z])
         self.rate.sleep()
-        self.done = False
+        done = False
 
         # position of turtlebot before taking steps
         model_state = self.pose_ig.get_msg()
@@ -380,8 +380,9 @@ class Env:
         distance_to_goal_prv = sqrt((x_previous-self.target_x)**2+(y_previous-self.target_y)**2)
         # Collect previous pheromone data
         phero_prev = self.phero_ig.get_msg().data
+        
         # 1. Move robot with the action input for time_step
-        while (record_time_step < time_step):
+        while (record_time_step < time_step and done == False):
             self.pub.publish(self.move_cmd)
             self.rate.sleep()
             record_time = time.time()
@@ -432,13 +433,12 @@ class Env:
         
         #print("phero_grad: {}".format(phero_grad))
         state_arr = phero_grad
-        state_arr = np.append(state_arr, np.asarray(phero_now))
+        state_arr = np.append(state_arr, phero_now)
         state_arr = np.append(state_arr, distance_to_goal)
+        state_arr = np.append(state_arr, angle_diff)
         state_arr = np.append(state_arr, linear_x)
         state_arr = np.append(state_arr, angular_z)
-        state_arr = np.append(state_arr, angle_diff)
-        # 5. State reshape
-        state = state_arr.reshape(1, self.state_num)
+        state = state_arr.reshape(self.state_num)
 
         # 6. Reward assignment
         ## 6.0. Initialisation of rewards

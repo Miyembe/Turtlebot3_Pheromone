@@ -406,7 +406,7 @@ def main(args):
 				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
 				action, eps = actor_critic.act(current_state)
 				print("action is speed: %s, angular: %s", action[0][1], action[0][0])
-				_, new_state, reward, done, info = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				_, new_state, reward, done, info = game_state.step(0.1, linear_x = action[0][1], angular_z = action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				total_reward = total_reward + reward
 				###########################################################################################
 
@@ -532,7 +532,7 @@ if __name__ == "__main__":
 	args = parser.parse_args("")
 	args.exp_name = "exp_random_seed"
 	name_var = 'random_seed'
-	list_var = [210, 54, 133]
+	list_var = [66, 51, 33]
 	for var in list_var:
 		setattr(args, name_var, var)
 		print(args)

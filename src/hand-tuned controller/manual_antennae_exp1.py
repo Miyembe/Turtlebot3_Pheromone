@@ -83,6 +83,7 @@ class WaypointNavigation:
         self.counter_step = 0
         self.counter_collision = 0
         self.counter_success = 0
+        self.counter_timeout = 0
         self.arrival_time = []
         self.target_index = 0
         self.radius = 4
@@ -98,10 +99,7 @@ class WaypointNavigation:
         self.traj_name = "{}_traj".format(self.file_name)
         print(self.file_name)
 
-        # Initialise simulation
-        self.reset_timer = time.time()
-        self.reset()
-        self.reset_flag = False
+        
 
         # antenna movement related parameters
         self.b_range = np.arange(1.1, 1.1+self.step_size, self.step_size)
@@ -115,9 +113,21 @@ class WaypointNavigation:
 
         # Log related
         self.log_timer = time.time()
+        self.positions = []
+        for i in range(self.num_robots):
+            self.positions.append([])
+        self.traj_eff = list()
 
+    
+        # Parameters
         self.beta_const = self.b_range[0]
         self.sensitivity = self.s_range[0]
+
+        # Initialise simulation
+        self.reset_timer = time.time()
+        self.reset()
+        self.reset_flag = False
+        
         
     def ReadPhero(self, message):
         phero_data = message.data 
@@ -172,6 +182,7 @@ class WaypointNavigation:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%pos.x, '%0.2f'%pos.y])
+                self.positions[i].append([pos.x, pos.y])
             self.log_timer = time.time()
 
         # ========================================================================= #
@@ -319,8 +330,29 @@ class WaypointNavigation:
             self.arrival_time.append(art)
             print("Episode time: %0.2f"%art)
 
+            # Compute trajectory efficiency (how can I add outlier removal?)
+            total_distance = [0.0]*self.num_robots
+            pure_distance = [0.0]*self.num_robots
+            for i in range(self.num_robots):
+                for j in range(len(self.positions[i])-1):
+                    distance_t = sqrt((self.positions[i][j+1][0] - self.positions[i][j][0])**2 + (self.positions[i][j+1][1] - self.positions[i][j][1])**2)
+                    if distance_t <= 0.5:
+                        total_distance[i] += distance_t
+                pure_distance[i] = sqrt((self.positions[i][0][0] - self.positions[i][-1][0])**2 + (self.positions[i][0][1] - self.positions[i][-1][1])**2)
+
+            avg_distance_traj = np.average(total_distance)
+            avg_distance_pure = np.average(pure_distance)
+            traj_efficiency = avg_distance_pure/avg_distance_traj
+            print("Step: {}, avg_distance_traj: {}".format(self.counter_step, avg_distance_traj))
+            #print("self.positions: {}".format(self.positions))
+            #print("Total Distance: {}".format(total_distance))
+            print("avg_distance_pure: {}, traj_efficiency: {}".format(avg_distance_pure, traj_efficiency))
+            #print("distance_t: {}".format(distance_t))
+
+            self.traj_eff.append(traj_efficiency)
+
         if self.is_timeout == True:
-            self.counter_collision += 1
+            self.counter_timeout += 1
             self.counter_step += 1
             print("Timeout!")
 
@@ -403,38 +435,47 @@ class WaypointNavigation:
         if self.counter_step == 0:
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['Episode', 'Beta_const', 'Sensitivity', 'Success Rate', 'Average Arrival time', 'Standard Deviation'])
+                csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'std_at', 'Collision Rate', 'Timeout Rate', 'Trajectory Efficiency', 'std_te'])
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
         if self.counter_step != 0:
             if (self.counter_collision != 0 or self.counter_success != 0):
-                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision)
+                succ_percentage = 100*self.counter_success/(self.counter_success+self.counter_collision+self.counter_timeout)
+                col_percentage = 100*self.counter_collision/(self.counter_success+self.counter_collision+self.counter_timeout)
+                tout_percentage = 100*self.counter_timeout/(self.counter_success+self.counter_collision+self.counter_timeout)
             else:
                 succ_percentage = 0
+                col_percentage = 0
+                tout_percentage = 0
             print("Counter: {}".format(self.counter_step))
         
         if (self.counter_step % 1 == 0 and self.counter_step != 0):
             print("Beta_const: {}, Sensitivity: {}".format(self.beta_const, self.sensitivity))
             print("Success Rate: {}%".format(succ_percentage))
-
-        if (self.counter_step % 1 == 0 and self.counter_step != 0):
+            print("counter_step: {}".format(self.counter_step))
+        if (self.counter_step % 100 == 0 and self.counter_step != 0):
             avg_comp = np.average(np.asarray(self.arrival_time))
             std_comp = np.std(np.asarray(self.arrival_time))
+            avg_traj = np.average(np.asarray(self.traj_eff))
+            std_traj = np.std(np.asarray(self.traj_eff))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
             
             with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%self.beta_const, '%0.2f'%self.sensitivity, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp])
+                csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage, '%0.4f'%avg_traj, '%0.4f'%std_traj])
             
-            self.paramUpdate()
-            self.arrival_time = []
+            #self.paramUpdate()
+            self.arrival_time = list()
+            self.traj_eff = list()
             self.counter_collision = 0
             self.counter_success = 0
             self.target_index = 0
             
-
+        self.positions = []
+        for i in range(self.num_robots):
+            self.positions.append([])
         self.reset_timer = time.time()
         self.reset_flag = True
         

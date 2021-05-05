@@ -487,18 +487,20 @@ def main(args):
 	if train_indicator==0:
 		for i in range(num_trials):
 			print("trial:" + str(i))
-			_, current_state = game_state.reset()
 			
-			actor_critic.load_weights(actor_critic.save_dir, '590', '256')
+			actor_critic.load_weights(actor_critic.save_dir, '390', '256')
+			_, current_state = game_state.reset()
 			##############################################################################################
 			total_reward = 0
-			
+			epinfos = []
 			for j in range(trial_len):
-
+				
 				###########################################################################################
+				#print('wanted value is %s:', game_state.observation_space.shape[0])
 				current_state = current_state.reshape((1, game_state.observation_space.shape[0]))
 				action, eps = actor_critic.act(current_state)
-				_, new_state, reward, done, info = game_state.step(0.1, action[0][1], action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
+				#print("action is speed: %s, angular: %s", action[0][1], action[0][0])
+				_, new_state, reward, done, info = game_state.step(0.1, linear_x = action[0][1], angular_z = action[0][0]) # we get reward and state here, then we need to calculate if it is crashed! for 'dones' value
 				total_reward = total_reward + reward
 				###########################################################################################
 
@@ -510,7 +512,7 @@ def main(args):
 				# 	actor_critic.train()
 				# 	actor_critic.update_target()   
 				
-				new_state = new_state.reshape((num_robots, game_state.observation_space.shape[0]))
+				new_state = new_state.reshape((1, game_state.observation_space.shape[0]))
 				# actor_critic.remember(cur_state, action, reward, new_state, done)   # remember all the data using memory, memory data will be samples to samples automatically.
 				# cur_state = new_state
 
