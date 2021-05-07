@@ -64,7 +64,7 @@ class WaypointNavigation:
 
         # Initialise parameters
         
-        self.step_size = 0.05
+        self.step_size = 0.1
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
         self.v_range = np.arange(0.2, 0.6, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
@@ -101,8 +101,8 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
-        self.s_range = np.arange(0.4, 0.4+self.step_size, self.step_size)
+        self.b_range = np.arange(0.7, 0.7+self.step_size, self.step_size)
+        self.s_range = np.arange(0.8, 0.8+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
         self.s_size = self.s_range.size
@@ -171,11 +171,11 @@ class WaypointNavigation:
         w = [0, 0]
         
         distances = [None]*self.num_robots
+        distance_btw_robots = [0.0]
         for i in range(self.num_robots):
             distances[i] = sqrt((poss[i].x-goal[i][0])**2+(poss[i].y-goal[i][1])**2)
-            for j in range(self.num_robots):
-                if j != i:
-                    distance_btw_robots[i][j] = sqrt((x[i]-x[j])**2+(y[i]-y[j])**2) # Python 
+
+        distance_btw_robots = sqrt((x[0]-x[1])**2+(y[0]-y[1])**2) # Python 
         step_timer = time.time()
         reset_time = step_timer - self.reset_timer
 
@@ -185,7 +185,7 @@ class WaypointNavigation:
                 with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%poss[i].x, '%0.2f'%poss[i].y])
-                self.positions[i].append(x[i], y[i]])
+                self.positions[i].append([x[i], y[i]])
             self.log_timer = time.time()
 
 
