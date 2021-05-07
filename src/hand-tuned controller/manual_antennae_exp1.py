@@ -14,8 +14,12 @@ from tf.transformations import quaternion_from_euler
 from turtlebot3_pheromone.srv import PheroReset, PheroResetResponse
 from math import *
 from time import sleep
+import sys
+import os
 
 from std_msgs.msg import Float32MultiArray
+
+HOME = os.environ['HOME']
 
 class WaypointNavigation:
 
@@ -62,7 +66,7 @@ class WaypointNavigation:
 
         # Initialise parameters
         
-        self.step_size = 0.05
+        self.step_size = 0.1
         #self.b_range = np.arange(0, 1+self.step_size, self.step_size)
         self.v_range = np.arange(0.2, 1+self.step_size, self.step_size)
         self.w_range = np.arange(0.2, 1+self.step_size, self.step_size)
@@ -102,7 +106,7 @@ class WaypointNavigation:
         
 
         # antenna movement related parameters
-        self.b_range = np.arange(1.1, 1.1+self.step_size, self.step_size)
+        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
         self.s_range = np.arange(0.8, 0.8+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
@@ -179,7 +183,7 @@ class WaypointNavigation:
         # Log Positions
         if time.time() - self.log_timer > 0.5:
             for i in range(self.num_robots):
-                with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
+                with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='a') as csv_file:
                         csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                         csv_writer.writerow(['%0.1f'%reset_time, '%i'%i, '%0.2f'%pos.x, '%0.2f'%pos.y])
                 self.positions[i].append([pos.x, pos.y])
@@ -433,10 +437,10 @@ class WaypointNavigation:
 	    # ========================================================================= #
         
         if self.counter_step == 0:
-            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
+            with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['Episode', 'Success Rate', 'Average Arrival time', 'std_at', 'Collision Rate', 'Timeout Rate', 'Trajectory Efficiency', 'std_te'])
-            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
+            with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.traj_name), mode='w') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['time', 'ID', 'x', 'y'])
 
@@ -462,7 +466,7 @@ class WaypointNavigation:
             std_traj = np.std(np.asarray(self.traj_eff))
             print("{} trials ended. Success rate: {}, average completion time: {}, Standard deviation: {}".format(self.counter_step, succ_percentage, avg_comp, std_comp))
             
-            with open('/home/sub/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
+            with open(HOME + '/catkin_ws/src/Turtlebot3_Pheromone/src/log/csv/{}.csv'.format(self.file_name), mode='a') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage, '%0.4f'%avg_traj, '%0.4f'%std_traj])
             
@@ -471,6 +475,7 @@ class WaypointNavigation:
             self.traj_eff = list()
             self.counter_collision = 0
             self.counter_success = 0
+            self.counter_timeout = 0
             self.target_index = 0
             
         self.positions = []
