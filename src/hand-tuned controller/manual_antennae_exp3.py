@@ -132,7 +132,7 @@ class WaypointNavigation:
 
         # antenna movement related parameters
 
-        self.b_range = np.arange(0.9, 0.9+self.step_size, self.step_size)
+        self.b_range = np.arange(0.7, 0.7+self.step_size, self.step_size)
         self.s_range = np.arange(1.3, 1.3+self.step_size, self.step_size)
 
         self.b_size = self.b_range.size
@@ -154,7 +154,6 @@ class WaypointNavigation:
         for i in range(self.num_robots):
             self.positions.append([])
         self.traj_eff = list()
-
         self.reset()
 
     # def RandomTwist(self):
@@ -610,7 +609,7 @@ class WaypointNavigation:
                 csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(['%i'%self.counter_step, '%0.2f'%succ_percentage, '%0.2f'%avg_comp, '%0.2f'%std_comp, '%0.2f'%col_percentage, '%0.2f'%tout_percentage, '%0.4f'%avg_traj, '%0.4f'%std_traj])
             
-            #self.paramUpdate()
+            self.paramUpdate()
             self.arrival_time = list()
             self.traj_eff = list()
             self.counter_collision = 0
